@@ -1,4 +1,7 @@
 {
   "name": "BrainBites",
-  "displayName": "BrainBites"
+  "displayName": "BrainBites",
+  "react-native-google-mobile-ads": {
+    "android_app_id": "ca-app-pub-7353957756801275~5242496423"
+  }
 }
