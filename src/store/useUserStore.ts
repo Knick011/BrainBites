@@ -47,7 +47,6 @@ interface UserState {
   checkDailyGoals: () => void;
   completeGoal: (goalId: string) => void;
   updateFlow: () => void;
-  generateDailyGoals: () => void;
   saveData: () => Promise<void>;
   loadData: () => Promise<void>;
   initializeApp: () => Promise<void>;
@@ -98,21 +97,12 @@ export const useUserStore = create<UserState>((set, get) => ({
     })),
 
   incrementScore: (points) =>
-    set((state) => {
-      const newState = {
-        stats: {
-          ...state.stats,
-          totalScore: state.stats.totalScore + points,
-        },
-      };
-      
-      // Auto-save after score changes
-      setTimeout(() => {
-        get().saveData();
-      }, 1000);
-      
-      return newState;
-    }),
+    set((state) => ({
+      stats: {
+        ...state.stats,
+        totalScore: state.stats.totalScore + points,
+      },
+    })),
 
   recordAnswer: (correct, category, difficulty) =>
     set((state) => {
@@ -135,11 +125,6 @@ export const useUserStore = create<UserState>((set, get) => ({
       if (correct) {
         newStats.difficultyStats[diffKey].correct++;
       }
-      
-      // Auto-save after answer recording
-      setTimeout(() => {
-        get().saveData();
-      }, 1000);
       
       return { stats: newStats };
     }),
@@ -278,19 +263,8 @@ export const useUserStore = create<UserState>((set, get) => ({
         lastFlowDate: state.lastFlowDate,
       };
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
-      console.log('User data saved successfully');
     } catch (error) {
       console.error('Failed to save user data:', error);
-      // Try to save critical data even if full save fails
-      try {
-        const criticalData = {
-          username: get().username,
-          stats: get().stats,
-        };
-        await AsyncStorage.setItem(`${STORAGE_KEY}_backup`, JSON.stringify(criticalData));
-      } catch (backupError) {
-        console.error('Failed to save backup data:', backupError);
-      }
     }
   },
 
@@ -300,42 +274,9 @@ export const useUserStore = create<UserState>((set, get) => ({
       if (savedData) {
         const parsed = JSON.parse(savedData);
         set(parsed);
-        console.log('User data loaded successfully');
-      } else {
-        // Try to load from backup
-        const backupData = await AsyncStorage.getItem(`${STORAGE_KEY}_backup`);
-        if (backupData) {
-          const parsed = JSON.parse(backupData);
-          set(parsed);
-          console.log('User data loaded from backup');
-        }
       }
     } catch (error) {
       console.error('Failed to load user data:', error);
-      // Reset to default state if loading fails
-      set({
-        username: 'Player',
-        isFirstTime: true,
-        stats: {
-          totalScore: 0,
-          totalQuestionsAnswered: 0,
-          correctAnswers: 0,
-          bestStreak: 0,
-          dailyStreak: 0,
-          lastPlayedDate: new Date().toISOString(),
-          totalPlayTime: 0,
-          categoriesPlayed: {},
-          difficultyStats: {
-            easy: { correct: 0, total: 0 },
-            medium: { correct: 0, total: 0 },
-            hard: { correct: 0, total: 0 },
-          },
-          leaderboardRank: 9999,
-        },
-        dailyGoals: [],
-        flowStreak: 0,
-        lastFlowDate: '',
-      });
     }
   },
 

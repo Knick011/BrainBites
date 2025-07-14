@@ -23,9 +23,6 @@ import { TimerService } from './src/services/TimerService';
 import { SoundService } from './src/services/SoundService';
 import { AnalyticsService } from './src/services/AnalyticsService';
 import { QuestionService } from './src/services/QuestionService';
-import AdMobService from './src/services/AdMobService';
-import { NetworkService } from './src/services/NetworkService';
-import { PerformanceService } from './src/services/PerformanceService';
 
 // Components
 import PersistentTimer from './src/components/Timer/PersistentTimer';
@@ -63,9 +60,6 @@ const App = () => {
       await SoundService.initialize();
       await AnalyticsService.initialize();
       await QuestionService.loadQuestions();
-      await AdMobService.initialize();
-      await NetworkService.initialize();
-      await PerformanceService.initialize();
       
       // Load user data
       await initializeApp();

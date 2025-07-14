@@ -46,12 +46,6 @@ class QuestionServiceClass {
       console.error('Failed to load questions:', error);
       // Fallback to sample questions if CSV fails
       this.loadSampleQuestions();
-      
-      // Ensure we have at least some questions
-      if (this.questions.length === 0) {
-        console.warn('No questions loaded, using emergency fallback');
-        this.loadEmergencyQuestions();
-      }
     }
   }
 
@@ -351,51 +345,6 @@ class QuestionServiceClass {
       },
     ];
     this.organizeQuestions();
-  }
-
-  private loadEmergencyQuestions() {
-    // Emergency fallback questions if everything else fails
-    const emergencyQuestions: Question[] = [
-      {
-        id: 'emergency-1',
-        category: 'General Knowledge',
-        question: 'What is the capital of France?',
-        optionA: 'London',
-        optionB: 'Paris',
-        optionC: 'Berlin',
-        optionD: 'Madrid',
-        correctAnswer: 'B',
-        explanation: 'Paris is the capital and largest city of France.',
-        level: 'easy',
-      },
-      {
-        id: 'emergency-2',
-        category: 'Science',
-        question: 'What is the chemical symbol for gold?',
-        optionA: 'Ag',
-        optionB: 'Au',
-        optionC: 'Fe',
-        optionD: 'Cu',
-        correctAnswer: 'B',
-        explanation: 'Au comes from the Latin word for gold, "aurum".',
-        level: 'medium',
-      },
-      {
-        id: 'emergency-3',
-        category: 'History',
-        question: 'In which year did World War II end?',
-        optionA: '1943',
-        optionB: '1944',
-        optionC: '1945',
-        optionD: '1946',
-        correctAnswer: 'C',
-        explanation: 'World War II ended in 1945 with the surrender of Germany and Japan.',
-        level: 'medium',
-      },
-    ];
-    
-    this.questions = emergencyQuestions;
-    this.organizeQuestions(); // Ensure categorization is applied to emergency questions
   }
 
   // Reset all used questions

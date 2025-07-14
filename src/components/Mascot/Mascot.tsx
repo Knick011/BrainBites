@@ -217,7 +217,7 @@ const Mascot: React.FC<MascotProps> = ({ forceShow = false }) => {
         return require('../../assets/mascot/depressed.png');
       case 'peeking':
       default:
-        return require('../../assets/mascot/below.png'); // Use below.png for peeking state
+        return require('../../assets/mascot/peeking.png');
     }
   };
 

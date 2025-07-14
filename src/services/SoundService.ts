@@ -49,17 +49,17 @@ class SoundServiceClass {
     const soundFiles = {
       correct: 'correct.mp3',
       incorrect: 'incorrect.mp3',
-      levelUp: 'streak.mp3', // Use existing streak sound
-      timerWarning: 'buttonpress.mp3', // Use button sound as warning
-      buttonClick: 'buttonpress.mp3', // Use existing buttonpress
-      mascotPeek: 'buttonpress.mp3', // Use button sound for now
-      mascotHappy: 'correct.mp3', // Use correct sound for happy
-      mascotSad: 'incorrect.mp3', // Use incorrect sound for sad
-      streakStart: 'streak.mp3', // Use existing streak sound
-      streakContinue: 'streak.mp3', // Use existing streak sound
-      streakBreak: 'incorrect.mp3', // Use incorrect sound for break
-      goalComplete: 'correct.mp3', // Use correct sound for goal
-      backgroundMusic: 'gamemusic.mp3', // Use existing gamemusic
+      levelUp: 'level_up.mp3',
+      timerWarning: 'timer_warning.mp3',
+      buttonClick: 'button_click.mp3',
+      mascotPeek: 'mascot_peek.mp3',
+      mascotHappy: 'mascot_happy.mp3',
+      mascotSad: 'mascot_sad.mp3',
+      streakStart: 'streak_start.mp3',
+      streakContinue: 'streak_continue.mp3',
+      streakBreak: 'streak_break.mp3',
+      goalComplete: 'goal_complete.mp3',
+      backgroundMusic: 'background_music.mp3',
     };
 
     Object.entries(soundFiles).forEach(([key, filename]) => {

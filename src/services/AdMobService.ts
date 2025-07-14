@@ -1,14 +1,14 @@
 import {
-  BannerAd,
-  BannerAdSize,
-  InterstitialAd,
-  RewardedAd,
-  AdEventType,
-  RewardedAdEventType,
-  TestIds,
-} from 'react-native-google-mobile-ads';
-import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+    AdEventType,
+    BannerAd,
+    BannerAdSize,
+    InterstitialAd,
+    RewardedAd,
+    RewardedAdEventType,
+    TestIds,
+  } from '@react-native-firebase/admob';
+  import { Platform } from 'react-native';
+  import AsyncStorage from '@react-native-async-storage/async-storage';
   
   interface AdConfig {
     showAds: boolean;
