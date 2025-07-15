@@ -6,34 +6,20 @@ Sound.setCategory('Playback');
 interface SoundEffects {
   correct: Sound | null;
   incorrect: Sound | null;
-  levelUp: Sound | null;
-  timerWarning: Sound | null;
   buttonClick: Sound | null;
-  mascotPeek: Sound | null;
-  mascotHappy: Sound | null;
-  mascotSad: Sound | null;
-  streakStart: Sound | null;
-  streakContinue: Sound | null;
-  streakBreak: Sound | null;
-  goalComplete: Sound | null;
-  backgroundMusic: Sound | null;
+  streak: Sound | null;
+  gamemusic: Sound | null;
+  menumusic: Sound | null;
 }
 
 class SoundServiceClass {
   private sounds: SoundEffects = {
     correct: null,
     incorrect: null,
-    levelUp: null,
-    timerWarning: null,
     buttonClick: null,
-    mascotPeek: null,
-    mascotHappy: null,
-    mascotSad: null,
-    streakStart: null,
-    streakContinue: null,
-    streakBreak: null,
-    goalComplete: null,
-    backgroundMusic: null,
+    streak: null,
+    gamemusic: null,
+    menumusic: null,
   };
 
   private isMuted = false;
@@ -45,35 +31,28 @@ class SoundServiceClass {
     // Load sound settings
     await this.loadSettings();
 
-    // Pre-load all sound files - handle missing files gracefully
+    // Pre-load all sound files from assets folder
     const soundFiles = {
-      correct: 'correct.mp3',
-      incorrect: 'incorrect.mp3',
-      levelUp: 'level_up.mp3',
-      timerWarning: 'timer_warning.mp3',
-      buttonClick: 'button_click.mp3',
-      mascotPeek: 'mascot_peek.mp3',
-      mascotHappy: 'mascot_happy.mp3',
-      mascotSad: 'mascot_sad.mp3',
-      streakStart: 'streak_start.mp3',
-      streakContinue: 'streak_continue.mp3',
-      streakBreak: 'streak_break.mp3',
-      goalComplete: 'goal_complete.mp3',
-      backgroundMusic: 'background_music.mp3',
+      correct: require('../assets/sounds/correct.mp3'),
+      incorrect: require('../assets/sounds/incorrect.mp3'),
+      buttonClick: require('../assets/sounds/buttonpress.mp3'),
+      streak: require('../assets/sounds/streak.mp3'),
+      gamemusic: require('../assets/sounds/gamemusic.mp3'),
+      menumusic: require('../assets/sounds/menumusic.mp3'),
     };
 
-    Object.entries(soundFiles).forEach(([key, filename]) => {
-      this.sounds[key as keyof SoundEffects] = new Sound(filename, Sound.MAIN_BUNDLE, (error) => {
+    Object.entries(soundFiles).forEach(([key, soundFile]) => {
+      this.sounds[key as keyof SoundEffects] = new Sound(soundFile, undefined, (error) => {
         if (error) {
-          console.log(`Sound file ${filename} not found - app will work without this sound`);
+          console.log(`Sound file ${key} not found - app will work without this sound`);
           // Set to null so the app continues to work
           this.sounds[key as keyof SoundEffects] = null;
         } else {
-          console.log(`Successfully loaded ${filename}`);
+          console.log(`Successfully loaded ${key}`);
           // Set properties for background music
-          if (key === 'backgroundMusic' && this.sounds.backgroundMusic) {
-            this.sounds.backgroundMusic.setNumberOfLoops(-1); // Loop infinitely
-            this.sounds.backgroundMusic.setVolume(this.musicVolume);
+          if ((key === 'gamemusic' || key === 'menumusic') && this.sounds[key as keyof SoundEffects]) {
+            this.sounds[key as keyof SoundEffects]?.setNumberOfLoops(-1); // Loop infinitely
+            this.sounds[key as keyof SoundEffects]?.setVolume(this.musicVolume);
           }
         }
       });
@@ -117,7 +96,7 @@ class SoundServiceClass {
 
     const sound = this.sounds[soundName];
     if (sound) {
-      sound.setVolume(soundName === 'backgroundMusic' ? this.musicVolume : this.effectsVolume);
+      sound.setVolume((soundName === 'gamemusic' || soundName === 'menumusic') ? this.musicVolume : this.effectsVolume);
       sound.play((success) => {
         if (!success) {
           console.log(`Failed to play ${soundName} sound`);
@@ -138,79 +117,69 @@ class SoundServiceClass {
     this.playSound('incorrect');
   }
 
-  playLevelUp() {
-    this.playSound('levelUp');
-  }
-
-  playTimerWarning() {
-    this.playSound('timerWarning');
-  }
-
   playButtonClick() {
     this.playSound('buttonClick');
   }
 
-  playMascotPeek() {
-    this.playSound('mascotPeek');
+  playStreak() {
+    this.playSound('streak');
   }
 
-  playMascotHappy() {
-    this.playSound('mascotHappy');
-  }
-
-  playMascotSad() {
-    this.playSound('mascotSad');
-  }
-
-  playStreakSound(streakCount: number) {
-    if (streakCount === 1) {
-      this.playSound('streakStart');
-    } else if (streakCount > 1) {
-      this.playSound('streakContinue');
+  playGameMusic() {
+    if (!this.isMuted && this.sounds.gamemusic) {
+      this.sounds.gamemusic.play();
     }
   }
 
-  playStreakBreak() {
-    this.playSound('streakBreak');
-  }
-
-  playGoalComplete() {
-    this.playSound('goalComplete');
-  }
-
-  playBackgroundMusic() {
-    if (!this.isMuted && this.sounds.backgroundMusic) {
-      this.sounds.backgroundMusic.play();
+  playMenuMusic() {
+    if (!this.isMuted && this.sounds.menumusic) {
+      this.sounds.menumusic.play();
     }
   }
 
-  stopBackgroundMusic() {
-    this.sounds.backgroundMusic?.stop();
+  stopGameMusic() {
+    this.sounds.gamemusic?.stop();
   }
 
-  pauseBackgroundMusic() {
-    this.sounds.backgroundMusic?.pause();
+  stopMenuMusic() {
+    this.sounds.menumusic?.stop();
   }
 
-  resumeBackgroundMusic() {
+  pauseGameMusic() {
+    this.sounds.gamemusic?.pause();
+  }
+
+  pauseMenuMusic() {
+    this.sounds.menumusic?.pause();
+  }
+
+  resumeGameMusic() {
     if (!this.isMuted) {
-      this.sounds.backgroundMusic?.play();
+      this.sounds.gamemusic?.play();
+    }
+  }
+
+  resumeMenuMusic() {
+    if (!this.isMuted) {
+      this.sounds.menumusic?.play();
     }
   }
 
   toggleMute() {
     this.isMuted = !this.isMuted;
     if (this.isMuted) {
-      this.stopBackgroundMusic();
+      this.stopGameMusic();
+      this.stopMenuMusic();
     } else {
-      this.playBackgroundMusic();
+      this.playMenuMusic();
     }
     this.saveSettings();
   }
 
   setMusicVolume(volume: number) {
     this.musicVolume = Math.max(0, Math.min(1, volume));
-    this.sounds.backgroundMusic?.setVolume(this.musicVolume);
+    this.sounds.gamemusic?.setVolume(this.musicVolume);
+    this.sounds.menumusic?.setVolume(this.musicVolume);
     this.saveSettings();
   }
 

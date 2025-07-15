@@ -52,6 +52,16 @@ const QuizScreen: React.FC = () => {
   useEffect(() => {
     loadQuestion();
     startQuestionTimer();
+    
+    // Switch to game music when entering quiz
+    SoundService.stopMenuMusic();
+    SoundService.playGameMusic();
+    
+    return () => {
+      // Switch back to menu music when leaving quiz
+      SoundService.stopGameMusic();
+      SoundService.playMenuMusic();
+    };
   }, []);
 
   useEffect(() => {
@@ -149,9 +159,9 @@ const QuizScreen: React.FC = () => {
     quizStore.incrementStreak();
     
     if (newStreak === 3) {
-      SoundService.playStreakSound(newStreak);
+      SoundService.playStreak();
     } else if (newStreak % 5 === 0) {
-      SoundService.playLevelUp();
+      SoundService.playStreak();
     }
 
     // Update user stats
@@ -184,7 +194,7 @@ const QuizScreen: React.FC = () => {
     SoundService.playIncorrect();
     
     if (quizStore.currentStreak > 0) {
-      SoundService.playStreakBreak();
+      SoundService.playStreak();
     }
     
     quizStore.resetStreak();
@@ -239,14 +249,14 @@ const QuizScreen: React.FC = () => {
 
   return (
     <LinearGradient
-      colors={['#FFE4B5', '#FFD700', '#FFA500']}
+      colors={['#E8F4FF', '#D4E9FF', '#C0DFFF']}
       style={styles.container}
     >
       <AnimatedBackground />
       
       <View style={styles.header}>
         <TouchableOpacity onPress={handleExit} style={styles.exitButton}>
-          <Icon name="close" size={30} color="#FFF" />
+                        <Icon name="close-circle" size={30} color="#FFF" />
         </TouchableOpacity>
         
         <View style={styles.scoreContainer}>
@@ -314,7 +324,7 @@ const QuizScreen: React.FC = () => {
                 onPress={handleNextQuestion}
               >
                 <Text style={styles.nextButtonText}>Next Question</Text>
-                <Icon name="arrow-forward" size={20} color="#FFF" />
+                <Icon name="arrow-forward-circle" size={20} color="#FFF" />
               </TouchableOpacity>
             </View>
           )}

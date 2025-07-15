@@ -1,14 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Animated,
-  TouchableOpacity,
   Dimensions,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -17,7 +13,6 @@ import { RootStackParamList } from '../../App';
 import { useUserStore } from '../store/useUserStore';
 import { SoundService } from '../services/SoundService';
 import AnimatedBackground from '../components/common/AnimatedBackground';
-import BubbleButton from '../components/common/BubbleButton';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -25,15 +20,12 @@ type NavigationProp = StackNavigationProp<RootStackParamList, 'Welcome'>;
 
 const WelcomeScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
-  const { username, setUsername, isFirstTime, setFirstTime } = useUserStore();
-  const [inputName, setInputName] = useState(username);
-  const [showNameInput, setShowNameInput] = useState(isFirstTime);
+  const { username } = useUserStore();
 
   // Animations
   const logoScale = useRef(new Animated.Value(0)).current;
   const titleOpacity = useRef(new Animated.Value(0)).current;
   const cabbyScale = useRef(new Animated.Value(0)).current;
-  const buttonScale = useRef(new Animated.Value(0)).current;
   const cabbyBounce = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -56,12 +48,6 @@ const WelcomeScreen: React.FC = () => {
         friction: 2,
         useNativeDriver: true,
       }),
-      Animated.spring(buttonScale, {
-        toValue: 1,
-        tension: 10,
-        friction: 2,
-        useNativeDriver: true,
-      }),
     ]).start();
 
     // Continuous CaBBY bounce
@@ -79,28 +65,24 @@ const WelcomeScreen: React.FC = () => {
         }),
       ])
     ).start();
-  }, []);
 
-  const handleStart = () => {
-    if (showNameInput && inputName.trim()) {
-      setUsername(inputName.trim());
-      setFirstTime(false);
-    }
-    SoundService.playButtonClick();
-    navigation.navigate('Home');
-  };
+    // Auto-navigate to home after 3 seconds
+    const timer = setTimeout(() => {
+      SoundService.playButtonClick();
+      navigation.navigate('Home');
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [navigation]);
 
   return (
     <LinearGradient
-      colors={['#FFD700', '#FFA500', '#FF8C00']}
+      colors={['#FFE5D9', '#FFD7C9', '#FFC9B9']}
       style={styles.container}
     >
       <AnimatedBackground />
       
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.content}
-      >
+      <View style={styles.content}>
         <Animated.View
           style={[
             styles.logoContainer,
@@ -137,39 +119,10 @@ const WelcomeScreen: React.FC = () => {
         >
           <View style={styles.speechBubble}>
             <Text style={styles.speechText}>
-              {showNameInput ? "What's your name?" : `Welcome back, ${username}!`}
+              Welcome back, {username}!
             </Text>
             <View style={styles.speechTriangle} />
           </View>
-        </Animated.View>
-
-        {showNameInput && (
-          <Animated.View style={[styles.inputContainer, { opacity: titleOpacity }]}>
-            <TextInput
-              style={styles.nameInput}
-              placeholder="Enter your name"
-              placeholderTextColor="#FFA500"
-              value={inputName}
-              onChangeText={setInputName}
-              maxLength={20}
-            />
-          </Animated.View>
-        )}
-
-        <Animated.View
-          style={[
-            styles.buttonContainer,
-            {
-              transform: [{ scale: buttonScale }],
-            },
-          ]}
-        >
-          <BubbleButton
-            title={showNameInput ? "Let's Start!" : "Continue Learning!"}
-            onPress={handleStart}
-            disabled={showNameInput && !inputName.trim()}
-            style={styles.startButton}
-          />
         </Animated.View>
 
         <Animated.View
@@ -182,7 +135,7 @@ const WelcomeScreen: React.FC = () => {
             Meet CaBBY - Your Learning Companion! 🦫
           </Text>
         </Animated.View>
-      </KeyboardAvoidingView>
+      </View>
     </LinearGradient>
   );
 };
@@ -203,13 +156,13 @@ const styles = StyleSheet.create({
   brainIcon: {
     width: 120,
     height: 120,
-    backgroundColor: '#FFF',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderRadius: 60,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.1,
     shadowRadius: 5,
     elevation: 8,
   },
@@ -223,15 +176,15 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 48,
     fontWeight: 'bold',
-    color: '#FFF',
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 2, height: 2 },
-    textShadowRadius: 3,
+    color: '#4A4A4A',
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
     fontFamily: 'Quicksand-Bold',
   },
   subtitle: {
     fontSize: 18,
-    color: '#FFF',
+    color: '#6A6A6A',
     marginTop: 10,
     textAlign: 'center',
     fontFamily: 'Nunito-Regular',
@@ -241,68 +194,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   speechBubble: {
-    backgroundColor: '#FFF',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     paddingHorizontal: 20,
     paddingVertical: 15,
     borderRadius: 20,
     marginBottom: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 5,
-  },
-  speechText: {
-    fontSize: 16,
-    color: '#333',
-    fontFamily: 'Nunito-Bold',
-  },
-  speechTriangle: {
-    position: 'absolute',
-    bottom: -10,
-    left: '50%',
-    marginLeft: -10,
-    width: 0,
-    height: 0,
-    borderTopWidth: 10,
-    borderLeftWidth: 10,
-    borderRightWidth: 10,
-    borderBottomWidth: 0,
-    borderTopColor: '#FFF',
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-  },
-  inputContainer: {
-    width: '100%',
-    marginBottom: 30,
-  },
-  nameInput: {
-    backgroundColor: '#FFF',
-    borderRadius: 25,
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    fontSize: 16,
-    color: '#333',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 3,
+  },
+  speechText: {
+    fontSize: 16,
+    color: '#4A4A4A',
+    textAlign: 'center',
     fontFamily: 'Nunito-Regular',
   },
-  buttonContainer: {
-    marginBottom: 20,
-  },
-  startButton: {
-    paddingHorizontal: 50,
+  speechTriangle: {
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 10,
+    borderRightWidth: 10,
+    borderTopWidth: 15,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: 'rgba(255, 255, 255, 0.9)',
+    alignSelf: 'center',
+    marginTop: -1,
   },
   footer: {
     position: 'absolute',
-    bottom: 30,
+    bottom: 50,
+    alignItems: 'center',
   },
   footerText: {
-    color: '#FFF',
     fontSize: 14,
+    color: '#6A6A6A',
+    textAlign: 'center',
     fontFamily: 'Nunito-Regular',
   },
 });

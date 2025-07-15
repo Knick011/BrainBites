@@ -201,10 +201,10 @@ const LeaderboardScreen: React.FC = () => {
           </Text>
           <View style={styles.statsRow}>
             <Text style={styles.statText}>
-              <Icon name="flash" size={12} color="#FFA500" /> {entry.streak} day streak
+                              <Icon name="flash-outline" size={12} color="#FFA500" /> {entry.streak} day streak
             </Text>
             <Text style={styles.statText}>
-              <Icon name="help-circle" size={12} color="#FFA500" /> {entry.questionsPerDay} Q/day
+                              <Icon name="help-circle-outline" size={12} color="#FFA500" /> {entry.questionsPerDay} Q/day
             </Text>
           </View>
         </View>
@@ -241,7 +241,7 @@ const LeaderboardScreen: React.FC = () => {
     >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Icon name="arrow-back" size={30} color="#FFF" />
+                        <Icon name="arrow-back-circle" size={30} color="#FFF" />
         </TouchableOpacity>
         <Text style={styles.title}>Leaderboard</Text>
         <View style={styles.placeholder} />

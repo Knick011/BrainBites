@@ -7,6 +7,7 @@ import {
   Animated,
   Dimensions,
   ScrollView,
+  SafeAreaView,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
@@ -38,8 +39,8 @@ const difficulties: DifficultyOption[] = [
     level: 'easy',
     title: 'Easy',
     subtitle: 'Perfect for warming up!',
-    color: '#4CAF50',
-    icon: 'leaf',
+    color: '#98E4A6',
+    icon: 'leaf-outline',
     points: '10 pts',
     timeReward: 1,
   },
@@ -47,7 +48,7 @@ const difficulties: DifficultyOption[] = [
     level: 'medium',
     title: 'Medium',
     subtitle: 'Challenge your brain!',
-    color: '#FFA500',
+    color: '#FFCAA0',
     icon: 'flame',
     points: '20 pts',
     timeReward: 2,
@@ -56,7 +57,7 @@ const difficulties: DifficultyOption[] = [
     level: 'hard',
     title: 'Hard',
     subtitle: 'Are you a genius?',
-    color: '#F44336',
+    color: '#FFB3B3',
     icon: 'flash',
     points: '30 pts',
     timeReward: 3,
@@ -74,10 +75,14 @@ const HomeScreen: React.FC = () => {
   ).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const floatAnim = useRef(new Animated.Value(0)).current;
+  const streakScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     // Check daily goals
     userStore.checkDailyGoals();
+    
+    // Ensure menu music is playing
+    SoundService.playMenuMusic();
     
     // Entrance animations
     Animated.timing(fadeAnim, {
@@ -129,6 +134,22 @@ const HomeScreen: React.FC = () => {
         }),
       ])
     ).start();
+
+    // Streak animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(streakScale, {
+          toValue: 1.05,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(streakScale, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
   }, []);
 
   const handleDifficultyPress = (difficulty: 'easy' | 'medium' | 'hard') => {
@@ -151,143 +172,155 @@ const HomeScreen: React.FC = () => {
     navigation.navigate('Leaderboard');
   };
 
-  const formatTime = (milliseconds: number): string => {
-    const isNegative = milliseconds < 0;
-    const absTime = Math.abs(milliseconds);
-    const minutes = Math.floor(absTime / 60000);
-    const seconds = Math.floor((absTime % 60000) / 1000);
-    
-    const formatted = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    return isNegative ? `-${formatted}` : formatted;
+  const getDayOfWeek = (index: number): string => {
+    const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    return days[index];
+  };
+
+  const getCurrentDayIndex = (): number => {
+    const today = new Date().getDay();
+    return today === 0 ? 6 : today - 1; // Convert Sunday=0 to Sunday=6
   };
 
   return (
     <LinearGradient
-      colors={['#FFE4B5', '#FFD700', '#FFA500']}
+      colors={['#FFF8E1', '#FFF3E0', '#FFECB3']}
       style={styles.container}
     >
       <AnimatedBackground />
       
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <Animated.View style={[styles.header, { opacity: fadeAnim }]}>
-          <View style={styles.userInfo}>
-            <Text style={styles.greeting}>Hello, {userStore.username}! 👋</Text>
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <Icon name="trophy" size={16} color="#FFA500" />
-                <Text style={styles.statText}>{userStore.stats.totalScore} pts</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Icon name="flame" size={16} color="#FF6347" />
-                <Text style={styles.statText}>{userStore.flowStreak} days</Text>
-              </View>
-            </View>
-          </View>
-          
-          <TouchableOpacity
-            style={styles.timerButton}
-            onPress={() => {}}
-          >
-            <Icon name="time" size={20} color={timerStore.remainingTime < 0 ? '#F44336' : '#4CAF50'} />
-            <Text style={[
-              styles.timerText,
-              timerStore.remainingTime < 0 && styles.timerNegative
-            ]}>
-              {formatTime(timerStore.remainingTime)}
-            </Text>
-          </TouchableOpacity>
-        </Animated.View>
-
-        <Animated.View style={[styles.mainContent, { opacity: fadeAnim }]}>
-          <Text style={styles.sectionTitle}>Choose Your Challenge</Text>
-          
-          <View style={styles.difficultyContainer}>
-            {difficulties.map((difficulty, index) => (
-              <Animated.View
-                key={difficulty.level}
-                style={{
-                  transform: [{ translateX: slideAnims[index] }],
-                }}
-              >
-                <DifficultyCard
-                  difficulty={difficulty}
-                  onPress={() => handleDifficultyPress(difficulty.level)}
-                  style={{ marginBottom: 15 }}
-                />
-              </Animated.View>
-            ))}
-          </View>
-
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Daily Streak Section */}
           <Animated.View 
             style={[
-              styles.quickActions,
-              {
-                transform: [
-                  { translateY: floatAnim },
-                ],
-              },
+              styles.streakSection,
+              { 
+                opacity: fadeAnim,
+                transform: [{ scale: streakScale }]
+              }
             ]}
           >
-            <TouchableOpacity
-              style={[styles.actionButton, styles.categoriesButton]}
-              onPress={handleCategoriesPress}
-            >
-              <Animated.View
-                style={{
-                  transform: [{ scale: pulseAnim }],
-                }}
-              >
-                <Icon name="grid" size={24} color="#FFF" />
-              </Animated.View>
-              <Text style={styles.actionButtonText}>Categories</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.actionButton, styles.goalsButton]}
-              onPress={handleDailyGoalsPress}
-            >
-              <Icon name="checkmark-circle" size={24} color="#FFF" />
-              <Text style={styles.actionButtonText}>Daily Goals</Text>
-              {userStore.dailyGoals.filter(g => !g.completed).length > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>
-                    {userStore.dailyGoals.filter(g => !g.completed).length}
-                  </Text>
+            <View style={styles.streakCard}>
+              <View style={styles.streakHeader}>
+                <Icon name="flame-outline" size={24} color="#9E9E9E" />
+                <Text style={styles.streakTitle}>Daily Streak</Text>
+              </View>
+              
+              <View style={styles.streakStats}>
+                <Text style={styles.streakCount}>{userStore.flowStreak} days</Text>
+                <View style={styles.streakIcons}>
+                  <View style={styles.streakIcon}>
+                    <Icon name="star-outline" size={20} color="#FFD700" />
+                    <Text style={styles.streakIconText}>0</Text>
+                  </View>
+                  <View style={styles.streakIcon}>
+                    <Icon name="time-outline" size={20} color="#4CAF50" />
+                    <Text style={styles.streakIconText}>0:00</Text>
+                  </View>
                 </View>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.actionButton, styles.leaderboardButton]}
-              onPress={handleLeaderboardPress}
-            >
-              <Icon name="podium" size={24} color="#FFF" />
-              <Text style={styles.actionButtonText}>Leaderboard</Text>
-              <Text style={styles.rankText}>#{userStore.stats.leaderboardRank}</Text>
-            </TouchableOpacity>
+              </View>
+              
+              <View style={styles.weekProgress}>
+                {Array.from({ length: 7 }, (_, index) => (
+                  <View 
+                    key={index} 
+                    style={[
+                      styles.dayCircle,
+                      index === getCurrentDayIndex() && styles.currentDay
+                    ]}
+                  >
+                    <Text style={[
+                      styles.dayText,
+                      index === getCurrentDayIndex() && styles.currentDayText
+                    ]}>
+                      {getDayOfWeek(index)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+              
+              <Text style={styles.streakMotivation}>
+                Play today to continue your streak!
+              </Text>
+            </View>
           </Animated.View>
-        </Animated.View>
 
-        <Animated.View 
-          style={[
-            styles.motivationalSection,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: floatAnim }],
-            },
-          ]}
-        >
-          <View style={styles.motivationalCard}>
-            <Text style={styles.motivationalTitle}>Today's Tip 💡</Text>
-            <Text style={styles.motivationalText}>
-              "The more you learn, the more places you'll go!" - Dr. Seuss
-            </Text>
-          </View>
-        </Animated.View>
-      </ScrollView>
+          {/* Choose Your Challenge Section */}
+          <Animated.View style={[styles.challengeSection, { opacity: fadeAnim }]}>
+            <Text style={styles.sectionTitle}>Choose Your Challenge</Text>
+            
+            <View style={styles.difficultyContainer}>
+              {difficulties.map((difficulty, index) => (
+                <Animated.View
+                  key={difficulty.level}
+                  style={{
+                    transform: [{ translateX: slideAnims[index] }],
+                  }}
+                >
+                  <DifficultyCard
+                    difficulty={difficulty}
+                    onPress={() => handleDifficultyPress(difficulty.level)}
+                    style={{ marginBottom: 15 }}
+                  />
+                </Animated.View>
+              ))}
+            </View>
+
+            <Animated.View 
+              style={[
+                styles.quickActions,
+                {
+                  transform: [
+                    { translateY: floatAnim },
+                  ],
+                },
+              ]}
+            >
+              <TouchableOpacity
+                style={[styles.actionButton, styles.categoriesButton]}
+                onPress={handleCategoriesPress}
+              >
+                <Animated.View
+                  style={{
+                    transform: [{ scale: pulseAnim }],
+                  }}
+                >
+                  <Icon name="grid-outline" size={24} color="#FFF" />
+                </Animated.View>
+                <Text style={styles.actionButtonText}>Categories</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionButton, styles.goalsButton]}
+                onPress={handleDailyGoalsPress}
+              >
+                <Icon name="checkmark-circle-outline" size={24} color="#FFF" />
+                <Text style={styles.actionButtonText}>Daily Goals</Text>
+                {userStore.dailyGoals.filter(g => !g.completed).length > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>
+                      {userStore.dailyGoals.filter(g => !g.completed).length}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionButton, styles.leaderboardButton]}
+                onPress={handleLeaderboardPress}
+              >
+                <Icon name="trophy-outline" size={24} color="#FFF" />
+                <Text style={styles.actionButtonText}>Leaderboard</Text>
+                <Text style={styles.rankText}>#{userStore.stats.leaderboardRank}</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </Animated.View>
+        </ScrollView>
+      </SafeAreaView>
     </LinearGradient>
   );
 };
@@ -296,72 +329,108 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  safeArea: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
     paddingBottom: 100,
+    paddingTop: 0,
   },
-  header: {
+  streakSection: {
     paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 20,
+    paddingTop: 20,
+  },
+  streakCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  streakHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    marginBottom: 15,
   },
-  userInfo: {
-    flex: 1,
-  },
-  greeting: {
-    fontSize: 24,
+  streakTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#FFF',
-    marginBottom: 5,
+    color: '#333',
+    marginLeft: 10,
     fontFamily: 'Quicksand-Bold',
   },
-  statsRow: {
+  streakStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  streakCount: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#333',
+    fontFamily: 'Quicksand-Bold',
+  },
+  streakIcons: {
     flexDirection: 'row',
     gap: 15,
   },
-  statItem: {
+  streakIcon: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
   },
-  statText: {
-    fontSize: 14,
-    color: '#FFF',
+  streakIconText: {
+    fontSize: 16,
+    color: '#666',
     fontFamily: 'Nunito-Regular',
   },
-  timerButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
+  weekProgress: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    justifyContent: 'space-between',
+    marginBottom: 15,
   },
-  timerText: {
-    fontSize: 16,
+  dayCircle: {
+    width: 35,
+    height: 35,
+    borderRadius: 17.5,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  currentDay: {
+    borderColor: '#FF9800',
+    backgroundColor: '#FFF3E0',
+  },
+  dayText: {
+    fontSize: 12,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#999',
     fontFamily: 'Nunito-Bold',
   },
-  timerNegative: {
-    color: '#F44336',
+  currentDayText: {
+    color: '#FF9800',
   },
-  mainContent: {
+  streakMotivation: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    fontFamily: 'Nunito-Regular',
+  },
+  challengeSection: {
     paddingHorizontal: 20,
+    paddingTop: 30,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#FFF',
+    color: '#333',
     marginBottom: 20,
     textAlign: 'center',
     fontFamily: 'Quicksand-Bold',
@@ -390,13 +459,13 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   categoriesButton: {
-    backgroundColor: '#9C27B0',
+    backgroundColor: '#C8B3FF',
   },
   goalsButton: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#94C7FF',
   },
   leaderboardButton: {
-    backgroundColor: '#FF9800',
+    backgroundColor: '#FFCAA0',
   },
   actionButtonText: {
     fontSize: 12,
@@ -408,7 +477,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -5,
     right: -5,
-    backgroundColor: '#F44336',
+    backgroundColor: '#FF6B6B',
     borderRadius: 10,
     width: 20,
     height: 20,
@@ -424,32 +493,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#FFF',
     marginTop: 2,
-    fontFamily: 'Nunito-Regular',
-  },
-  motivationalSection: {
-    paddingHorizontal: 20,
-  },
-  motivationalCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    padding: 20,
-    borderRadius: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  motivationalTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 5,
-    fontFamily: 'Quicksand-Bold',
-  },
-  motivationalText: {
-    fontSize: 14,
-    color: '#666',
-    fontStyle: 'italic',
     fontFamily: 'Nunito-Regular',
   },
 });

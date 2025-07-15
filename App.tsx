@@ -64,8 +64,14 @@ const App = () => {
       // Load user data
       await initializeApp();
       
-      // Play background music
-      SoundService.playBackgroundMusic();
+      // Play menu music
+      SoundService.playMenuMusic();
+      
+      console.log('BrainBites app initialized successfully!');
+      console.log('Assets loaded:', {
+        sounds: ['correct', 'incorrect', 'buttonpress', 'streak', 'gamemusic', 'menumusic'],
+        mascots: ['below', 'depressed', 'excited', 'gamemode', 'happy', 'sad']
+      });
     };
 
     init();
@@ -79,9 +85,11 @@ const App = () => {
   return (
     <SafeAreaProvider>
       <StatusBar 
-        backgroundColor={theme.colors.primary} 
+        backgroundColor="transparent" 
         barStyle="light-content" 
         animated={true}
+        translucent={true}
+        hidden={false}
       />
       <NavigationContainer
         theme={{

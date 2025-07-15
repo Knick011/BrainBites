@@ -138,10 +138,10 @@ export const QuizOptions: React.FC<QuizOptionsProps> = ({
     if (!showResult) return null;
 
     if (option === correctAnswer) {
-      return <Icon name="checkmark-circle" size={24} color="#4CAF50" />;
+      return <Icon name="checkmark-circle-outline" size={24} color="#4CAF50" />;
     }
     if (option === selectedAnswer && option !== correctAnswer) {
-      return <Icon name="close-circle" size={24} color="#F44336" />;
+      return <Icon name="close-circle-outline" size={24} color="#F44336" />;
     }
     return null;
   };

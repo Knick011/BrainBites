@@ -115,7 +115,6 @@ const Mascot: React.FC<MascotProps> = ({ forceShow = false }) => {
 
   const handleCorrectAnswer = () => {
     setMood('happy');
-    SoundService.playMascotHappy();
     animateMascot();
     
     if (showDialogue) {
@@ -126,7 +125,6 @@ const Mascot: React.FC<MascotProps> = ({ forceShow = false }) => {
 
   const handleIncorrectAnswer = () => {
     setMood('sad');
-    SoundService.playMascotSad();
     animateMascot();
     showMessage(MASCOT_MESSAGES.incorrect[Math.floor(Math.random() * MASCOT_MESSAGES.incorrect.length)]);
   };
@@ -178,7 +176,7 @@ const Mascot: React.FC<MascotProps> = ({ forceShow = false }) => {
   };
 
   const handleMascotPress = () => {
-    SoundService.playMascotPeek();
+    SoundService.playButtonClick();
     
     if (!showDialogue) {
       // Show stats or greeting
@@ -217,7 +215,7 @@ const Mascot: React.FC<MascotProps> = ({ forceShow = false }) => {
         return require('../../assets/mascot/depressed.png');
       case 'peeking':
       default:
-        return require('../../assets/mascot/peeking.png');
+        return require('../../assets/mascot/below.png');
     }
   };
 

@@ -66,8 +66,8 @@ const generateLeaderboardPosition = (score: number, questionsPerDay: number): nu
 };
 
 export const useUserStore = create<UserState>((set, get) => ({
-  username: 'Player',
-  isFirstTime: true,
+  username: 'CaBBy',
+  isFirstTime: false,
   stats: {
     totalScore: 0,
     totalQuestionsAnswered: 0,

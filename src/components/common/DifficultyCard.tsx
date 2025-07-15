@@ -121,7 +121,7 @@ const DifficultyCard: React.FC<DifficultyCardProps> = ({ difficulty, onPress, st
             
             <View style={styles.rewards}>
               <View style={styles.rewardItem}>
-                <Icon name="star" size={16} color="#FFD700" />
+                <Icon name="star-outline" size={16} color="#FFD700" />
                 <Text style={styles.rewardText}>{difficulty.points}</Text>
               </View>
               <View style={styles.rewardItem}>
@@ -131,7 +131,7 @@ const DifficultyCard: React.FC<DifficultyCardProps> = ({ difficulty, onPress, st
             </View>
           </View>
           
-          <Icon name="chevron-forward" size={24} color="#FFF" style={styles.arrow} />
+                          <Icon name="chevron-forward-circle" size={24} color="#FFF" style={styles.arrow} />
         </LinearGradient>
       </TouchableOpacity>
     </Animated.View>

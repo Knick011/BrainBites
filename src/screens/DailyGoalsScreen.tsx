@@ -142,13 +142,13 @@ const DailyGoalsScreen: React.FC = () => {
               onPress={() => handleClaimReward(goal.id, goal.reward)}
             >
               <Text style={styles.claimButtonText}>Claim Reward!</Text>
-              <Icon name="gift" size={20} color="#FFF" />
+                              <Icon name="gift-outline" size={20} color="#FFF" />
             </TouchableOpacity>
           )}
 
           {isCompleted && (
             <View style={styles.completedBadge}>
-              <Icon name="checkmark-circle" size={24} color="#4CAF50" />
+                              <Icon name="checkmark-circle-outline" size={24} color="#4CAF50" />
               <Text style={styles.completedText}>Completed!</Text>
             </View>
           )}
@@ -184,7 +184,7 @@ const DailyGoalsScreen: React.FC = () => {
 
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Icon name="arrow-back" size={30} color="#FFF" />
+                        <Icon name="arrow-back-circle" size={30} color="#FFF" />
         </TouchableOpacity>
         <Text style={styles.title}>Daily Goals</Text>
         <View style={styles.placeholder} />

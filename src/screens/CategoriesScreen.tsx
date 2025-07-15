@@ -178,7 +178,7 @@ const CategoriesScreen: React.FC = () => {
           onPress={() => navigation.goBack()} 
           style={styles.backButton}
         >
-          <Icon name="arrow-back" size={30} color="#FFF" />
+                        <Icon name="arrow-back-circle" size={30} color="#FFF" />
         </TouchableOpacity>
         <Text style={styles.title}>Choose a Category</Text>
         <View style={styles.placeholder} />
@@ -194,7 +194,7 @@ const CategoriesScreen: React.FC = () => {
 
         <Animated.View style={[styles.infoSection, { opacity: fadeAnim }]}>
           <View style={styles.infoCard}>
-            <Icon name="information-circle" size={24} color="#FFA500" />
+                          <Icon name="information-circle-outline" size={24} color="#FFA500" />
             <Text style={styles.infoText}>
               Each category contains questions of varying difficulty. 
               Answer correctly to earn points and time rewards!
