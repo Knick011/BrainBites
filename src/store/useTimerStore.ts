@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { TimerService } from '../services/TimerService';
 
 interface TimerState {
+  timeRemaining: number;
+  isNegative: boolean;
   remainingTime: number;
   isRunning: boolean;
   negativeScore: number;
@@ -18,12 +20,14 @@ interface TimerState {
 }
 
 export const useTimerStore = create<TimerState>((set, get) => ({
+  timeRemaining: 0,
+  isNegative: false,
   remainingTime: 0,
   isRunning: false,
   negativeScore: 0,
   isPaused: false,
 
-  setRemainingTime: (time) => set({ remainingTime: time }),
+  setRemainingTime: (time) => set({ remainingTime: time, timeRemaining: time }),
   setIsRunning: (running) => set({ isRunning: running }),
   setNegativeScore: (score) => set({ negativeScore: score }),
   setPaused: (paused) => set({ isPaused: paused }),

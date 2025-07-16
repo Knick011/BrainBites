@@ -17,6 +17,7 @@ import QuizScreen from './src/screens/QuizScreen';
 import CategoriesScreen from './src/screens/CategoriesScreen';
 import DailyGoalsScreen from './src/screens/DailyGoalsScreen';
 import LeaderboardScreen from './src/screens/LeaderboardScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 
 // Services
 import { TimerService } from './src/services/TimerService';
@@ -40,6 +41,7 @@ export type RootStackParamList = {
   Categories: undefined;
   DailyGoals: undefined;
   Leaderboard: undefined;
+  Settings: undefined;
 };
 
 enableScreens();
@@ -142,6 +144,7 @@ const App = () => {
           <Stack.Screen name="Categories" component={CategoriesScreen} />
           <Stack.Screen name="DailyGoals" component={DailyGoalsScreen} />
           <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
         </Stack.Navigator>
         <PersistentTimer />
         <Mascot />

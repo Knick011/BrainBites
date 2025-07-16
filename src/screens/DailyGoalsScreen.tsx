@@ -1,416 +1,267 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Animated,
-  Dimensions,
+  SafeAreaView,
+  Platform,
 } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { useUserStore } from '../store/useUserStore';
-import { useTimerStore } from '../store/useTimerStore';
 import { SoundService } from '../services/SoundService';
-import AnimatedBackground from '../components/common/AnimatedBackground';
-import * as Progress from 'react-native-progress';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import ProgressBar from '../components/ProgressBar';
 
 const DailyGoalsScreen: React.FC = () => {
   const navigation = useNavigation();
-  const userStore = useUserStore();
-  const timerStore = useTimerStore();
-  const dailyGoals = userStore.dailyGoals;
+  const { dailyGoals, completeGoal } = useUserStore();
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnims = useRef(
-    dailyGoals.map(() => new Animated.Value(SCREEN_WIDTH))
-  ).current;
-  const celebrateAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    // Update goals progress
-    userStore.checkDailyGoals();
-
-    // Entrance animations
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 500,
-      useNativeDriver: true,
-    }).start();
-
-    // Stagger goal cards animation
-    const staggerTime = 150;
-    slideAnims.forEach((anim, index) => {
-      Animated.spring(anim, {
-        toValue: 0,
-        delay: index * staggerTime,
-        tension: 10,
-        friction: 7,
-        useNativeDriver: true,
-      }).start();
-    });
-  }, []);
-
-  const handleClaimReward = (goalId: string, reward: number) => {
-    SoundService.playGoalComplete();
-    
-    // Mark goal as completed
-    userStore.completeGoal(goalId);
-    
-    // Add time reward
-    timerStore.addTime(reward);
-    
-    // Celebration animation
-    Animated.sequence([
-      Animated.timing(celebrateAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(celebrateAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start();
+  const getGoalIcon = (type: string) => {
+    switch (type) {
+      case 'questions': return 'help-circle';
+      case 'streak': return 'flame';
+      case 'accuracy': return 'checkmark-circle';
+      default: return 'star';
+    }
   };
 
   const getGoalColor = (type: string) => {
     switch (type) {
-      case 'questions':
-        return '#2196F3'; // blue
-      case 'streak':
-        return '#FF9800'; // orange
-      case 'accuracy':
-        return '#4CAF50'; // green
-      case 'time':
-        return '#9C27B0'; // purple
-      default:
-        return '#FFA500'; // fallback orange
+      case 'questions': return '#4ECDC4';
+      case 'streak': return '#FF9F1C';
+      case 'accuracy': return '#4CAF50';
+      default: return '#FFB347';
     }
   };
 
-  const renderGoal = (goal: any, index: number) => {
-    const progress = Math.min(1, goal.current / goal.target);
-    const isCompleted = goal.completed;
-    const canClaim = progress >= 1 && !isCompleted;
+  const handleClaimReward = (goalId: string) => {
+    SoundService.playCorrect();
+    completeGoal(goalId);
+    // Add time reward logic here
+  };
+
+  const renderGoal = (goal: any) => {
+    const progress = goal.current / goal.target;
+    const isComplete = progress >= 1;
+    const color = getGoalColor(goal.type);
 
     return (
-      <Animated.View
-        key={goal.id}
-        style={[
-          styles.goalCard,
-          {
-            transform: [{ translateX: slideAnims[index] }],
-            opacity: fadeAnim,
-          },
-        ]}
-      >
-        <View style={[styles.goalHeader, { backgroundColor: getGoalColor(goal.type) }]}>
-          <Icon name={getGoalIcon(goal.type)} size={30} color="#FFF" />
-          <View style={styles.rewardBadge}>
-            <Icon name="time" size={16} color="#FFF" />
-            <Text style={styles.rewardText}>+{goal.reward}min</Text>
-          </View>
+      <View key={goal.id} style={styles.goalCard}>
+        <View style={[styles.goalIcon, { backgroundColor: color + '20' }]}>
+          <Icon name={getGoalIcon(goal.type)} size={24} color={color} />
         </View>
-
+        
         <View style={styles.goalContent}>
+          <Text style={styles.goalTitle}>{goal.title}</Text>
           <Text style={styles.goalDescription}>{goal.description}</Text>
           
           <View style={styles.progressContainer}>
-            <Progress.Bar
-              progress={progress}
-              width={SCREEN_WIDTH - 100}
-              height={8}
-              color={getGoalColor(goal.type)}
-              unfilledColor="#E0E0E0"
-              borderWidth={0}
-              borderRadius={4}
-            />
+            <ProgressBar progress={progress} color={color} />
             <Text style={styles.progressText}>
-              {goal.current}/{goal.target} {goal.type === 'accuracy' ? '%' : ''}
+              {goal.current}/{goal.target} {goal.unit}
             </Text>
           </View>
-
-          {canClaim && (
+          
+          {isComplete && !goal.completed && (
             <TouchableOpacity
-              style={[styles.claimButton, { backgroundColor: getGoalColor(goal.type) }]}
-              onPress={() => handleClaimReward(goal.id, goal.reward)}
+              style={[styles.claimButton, { backgroundColor: color }]}
+              onPress={() => handleClaimReward(goal.id)}
             >
-              <Text style={styles.claimButtonText}>Claim Reward!</Text>
-                              <Icon name="gift-outline" size={20} color="#FFF" />
+              <Text style={styles.claimButtonText}>Claim {goal.reward}</Text>
+              <Icon name="time" size={16} color="white" />
             </TouchableOpacity>
           )}
-
-          {isCompleted && (
+          
+          {goal.completed && (
             <View style={styles.completedBadge}>
-                              <Icon name="checkmark-circle-outline" size={24} color="#4CAF50" />
-              <Text style={styles.completedText}>Completed!</Text>
+              <Icon name="checkmark-circle" size={20} color={color} />
+              <Text style={[styles.completedText, { color }]}>Completed!</Text>
             </View>
           )}
         </View>
-      </Animated.View>
+      </View>
     );
   };
 
-  const getGoalIcon = (type: string) => {
-    switch (type) {
-      case 'questions':
-        return 'help-circle';
-      case 'streak':
-        return 'flame';
-      case 'accuracy':
-        return '#4CAF50';
-      case 'time':
-        return '#9C27B0';
-      default:
-        return '#FFA500';
-    }
-  };
-
-  const completedCount = dailyGoals.filter(g => g.completed).length;
-  const totalRewards = dailyGoals.reduce((sum, g) => sum + (g.completed ? g.reward : 0), 0);
-
   return (
-    <LinearGradient
-      colors={['#FFE4B5', '#FFD700', '#FFA500']}
-      style={styles.container}
-    >
-      <AnimatedBackground />
-
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                        <Icon name="arrow-back-circle" size={30} color="#FFF" />
+          <Icon name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.title}>Daily Goals</Text>
-        <View style={styles.placeholder} />
+        <Text style={styles.headerTitle}>Daily Goals</Text>
+        <View style={{ width: 44 }} />
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <Animated.View style={[styles.statsCard, { opacity: fadeAnim }]}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{completedCount}/{dailyGoals.length}</Text>
-            <Text style={styles.statLabel}>Completed</Text>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>Today's Progress</Text>
+          <Text style={styles.summarySubtitle}>
+            {dailyGoals.filter(g => g.completed).length} of {dailyGoals.length} goals completed
+          </Text>
+          <View style={styles.summaryProgress}>
+            {dailyGoals.map((goal, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.summaryDot,
+                  goal.completed && styles.summaryDotCompleted
+                ]}
+              />
+            ))}
           </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{totalRewards} min</Text>
-            <Text style={styles.statLabel}>Earned Today</Text>
-          </View>
-        </Animated.View>
-
-        <View style={styles.goalsContainer}>
-          {dailyGoals.map((goal, index) => renderGoal(goal, index))}
         </View>
 
-        <Animated.View 
-          style={[
-            styles.motivationCard,
-            {
-              opacity: fadeAnim,
-              transform: [
-                {
-                  scale: celebrateAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [1, 1.05],
-                  }),
-                },
-              ],
-            },
-          ]}
-        >
-          <Text style={styles.motivationTitle}>
-            {completedCount === dailyGoals.length ? '🎉 All Goals Complete!' : '💪 Keep Going!'}
-          </Text>
-          <Text style={styles.motivationText}>
-            {completedCount === dailyGoals.length
-              ? "Amazing work! You've conquered all today's challenges!"
-              : `Complete ${dailyGoals.length - completedCount} more goal${
-                  dailyGoals.length - completedCount > 1 ? 's' : ''
-                } to maximize your rewards!`}
-          </Text>
-        </Animated.View>
+        <View style={styles.goalsContainer}>
+          {dailyGoals.map(renderGoal)}
+        </View>
       </ScrollView>
-    </LinearGradient>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FFF8E7',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 20,
+    paddingVertical: 16,
+    backgroundColor: 'white',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFF8E7',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  title: {
-    fontSize: 24,
+  headerTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#FFF',
-    fontFamily: 'Quicksand-Bold',
+    color: '#333',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'Roboto-Bold',
   },
-  placeholder: {
-    width: 40,
+  scrollView: {
+    flex: 1,
   },
-  scrollContent: {
-    flexGrow: 1,
+  summaryCard: {
+    backgroundColor: 'white',
+    margin: 20,
+    padding: 20,
+    borderRadius: 16,
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  summaryTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  summarySubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
+  },
+  summaryProgress: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  summaryDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#E0E0E0',
+  },
+  summaryDotCompleted: {
+    backgroundColor: '#4CAF50',
+  },
+  goalsContainer: {
     paddingHorizontal: 20,
     paddingBottom: 30,
   },
-  statsCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 20,
-    padding: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 5,
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    fontFamily: 'Quicksand-Bold',
-  },
-  statLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 5,
-    fontFamily: 'Nunito-Regular',
-  },
-  statDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: '#E0E0E0',
-  },
-  goalsContainer: {
-    marginBottom: 20,
-  },
   goalCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 20,
-    marginBottom: 15,
-    overflow: 'hidden',
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    marginBottom: 12,
+    padding: 16,
+    borderRadius: 16,
+    elevation: 2,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 4,
   },
-  goalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  goalIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
     alignItems: 'center',
-    padding: 15,
-  },
-  rewardBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 15,
-  },
-  rewardText: {
-    color: '#FFF',
-    fontWeight: 'bold',
-    marginLeft: 5,
-    fontSize: 14,
-    fontFamily: 'Nunito-Bold',
+    marginRight: 16,
   },
   goalContent: {
-    padding: 20,
+    flex: 1,
+  },
+  goalTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 2,
   },
   goalDescription: {
-    fontSize: 16,
-    color: '#333',
-    marginBottom: 15,
-    fontFamily: 'Nunito-Bold',
-  },
-  progressContainer: {
-    marginBottom: 15,
-  },
-  progressText: {
     fontSize: 14,
     color: '#666',
-    marginTop: 5,
+    marginBottom: 12,
+  },
+  progressContainer: {
+    marginBottom: 12,
+  },
+  progressText: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 4,
     textAlign: 'right',
-    fontFamily: 'Nunito-Regular',
   },
   claimButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 25,
-    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    gap: 6,
   },
   claimButtonText: {
-    color: '#FFF',
-    fontSize: 16,
+    color: 'white',
     fontWeight: 'bold',
-    fontFamily: 'Nunito-Bold',
+    fontSize: 14,
   },
   completedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    gap: 6,
   },
   completedText: {
-    fontSize: 16,
-    color: '#4CAF50',
     fontWeight: 'bold',
-    fontFamily: 'Nunito-Bold',
-  },
-  motivationCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 20,
-    padding: 20,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  motivationTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 10,
-    fontFamily: 'Quicksand-Bold',
-  },
-  motivationText: {
     fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    fontFamily: 'Nunito-Regular',
   },
 });
 

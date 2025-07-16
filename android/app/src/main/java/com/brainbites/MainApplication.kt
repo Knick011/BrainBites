@@ -18,6 +18,7 @@ class MainApplication : Application(), ReactApplication {
             PackageList(this).packages.apply {
               // Add our custom package for PowerManager
               add(PowerManagerPackage())
+              add(TimerPackage())
             }
 
         override fun getJSMainModuleName(): String = "index"

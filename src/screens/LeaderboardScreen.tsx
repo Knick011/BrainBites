@@ -1,394 +1,233 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  Animated,
   TouchableOpacity,
-  Image,
+  SafeAreaView,
+  Platform,
 } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { useUserStore } from '../store/useUserStore';
-import { SoundService } from '../services/SoundService';
+
+const CAPYBARA_NAMES = [
+  'CapyBOSS', 'ChillBara', 'SwimKing', 'WaterPig', 'MudMaster',
+  'GrassEater', 'RiverRider', 'SunBather', 'NapMaster', 'CapyChamp',
+  'BaraBoss', 'WetNose', 'FurrySwimmer', 'LazyBara', 'SmartyCappy',
+  'QuizBara', 'BrainyCappy', 'StudyBara', 'NerdyCappy', 'CoolBara',
+  'ZenMaster', 'ChonkyBoy', 'SplashKing', 'MudBuddy', 'GreenMuncher',
+  'RiverQueen', 'CapyGenius', 'BaraScholar', 'WiseCappy', 'FlowMaster'
+];
 
 interface LeaderboardEntry {
   rank: number;
   name: string;
   score: number;
-  questionsPerDay: number;
-  streak: number;
+  flow: number;
   avatar: string;
-  isPlayer?: boolean;
 }
-
-const FAKE_NAMES = [
-  'BrainMaster2024', 'QuizWhiz', 'NeuronNinja', 'SynapseKing', 'CortexChamp',
-  'BrainMaster2024', 'QuizWhiz', 'NeuronNinja', 'SynapseKing', 'CortexChamp',
-  'MemoryMaestro', 'ThinkTank', 'IQInfinity', 'LogicLord', 'PuzzlePro',
-  'SmartCookie', 'BrainiacBob', 'CleverCathy', 'WisdomWarrior', 'KnowledgeKnight',
-  'StudySamurai', 'FactFinder', 'TriviaTitan', 'MindMage', 'ThoughtThief',
-  'QuestionQueen', 'AnswerAce', 'BrilliantBrain', 'GeniusGuru', 'ScholarSage',
-];
-
-const AVATARS = ['🧠', '🎓', '📚', '💡', '🏆', '⭐', '🌟', '✨', '🎯', '🚀'];
-
-const generateFakeLeaderboard = (playerData: any): LeaderboardEntry[] => {
-  const entries: LeaderboardEntry[] = [];
-  const playerRank = playerData.leaderboardRank;
-  
-  // Generate top players (3-4 hours/day usage)
-  for (let i = 1; i <= 10; i++) {
-    if (i === playerRank) continue;
-    
-    const baseScore = 50000 - (i * 2000) + Math.floor(Math.random() * 1000);
-    const questionsPerDay = 150 + Math.floor(Math.random() * 50);
-    const streak = 30 + Math.floor(Math.random() * 20);
-    
-    entries.push({
-      rank: i,
-      name: FAKE_NAMES[i - 1],
-      score: baseScore,
-      questionsPerDay,
-      streak,
-      avatar: AVATARS[i % AVATARS.length],
-    });
-  }
-  
-  // Generate players around the user's rank
-  const surroundingRanks = [];
-  for (let i = -5; i <= 5; i++) {
-    const rank = playerRank + i;
-    if (rank > 0 && rank !== playerRank && rank > 10) {
-      surroundingRanks.push(rank);
-    }
-  }
-  
-  surroundingRanks.forEach((rank) => {
-    const scoreVariance = (rank - 10) * 100;
-    const baseScore = 40000 - scoreVariance + Math.floor(Math.random() * 500);
-    const questionsPerDay = 80 + Math.floor(Math.random() * 40);
-    const streak = 5 + Math.floor(Math.random() * 15);
-    
-    entries.push({
-      rank,
-      name: FAKE_NAMES[rank % FAKE_NAMES.length],
-      score: Math.max(100, baseScore),
-      questionsPerDay,
-      streak,
-      avatar: AVATARS[rank % AVATARS.length],
-    });
-  });
-  
-  // Add the player
-  entries.push({
-    rank: playerRank,
-    name: playerData.username,
-    score: playerData.totalScore,
-    questionsPerDay: Math.floor(playerData.totalQuestionsAnswered / Math.max(1, playerData.flowStreak)),
-    streak: playerData.flowStreak,
-    avatar: '🦫', // CaBBY
-    isPlayer: true,
-  });
-  
-  // Sort by rank
-  return entries.sort((a, b) => a.rank - b.rank);
-};
 
 const LeaderboardScreen: React.FC = () => {
   const navigation = useNavigation();
-  const userStore = useUserStore();
+  const { username, stats, flowStreak } = useUserStore();
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [selectedTab, setSelectedTab] = useState<'global' | 'weekly' | 'daily'>('global');
-  
-  const scrollRef = useRef<ScrollView>(null);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const playerHighlightAnim = useRef(new Animated.Value(0)).current;
-  
+  const [userRank, setUserRank] = useState(0);
+
   useEffect(() => {
-    // Update leaderboard rank based on activity
-    userStore.updateLeaderboardRank();
+    generateLeaderboard();
+  }, [stats.totalScore]);
+
+  const generateLeaderboard = () => {
+    const entries: LeaderboardEntry[] = [];
     
-    // Generate fake leaderboard
-    const playerData = {
-      username: userStore.username,
-      totalScore: userStore.stats.totalScore,
-      totalQuestionsAnswered: userStore.stats.totalQuestionsAnswered,
-      flowStreak: userStore.flowStreak,
-      leaderboardRank: userStore.stats.leaderboardRank,
-    };
-    
-    setLeaderboard(generateFakeLeaderboard(playerData));
-    
-    // Animate in
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 500,
-      useNativeDriver: true,
-    }).start();
-    
-    // Highlight player entry
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(playerHighlightAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(playerHighlightAnim, {
-          toValue: 0,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-  }, []);
-  
-  const renderLeaderboardEntry = (entry: LeaderboardEntry, index: number) => {
-    const isTop3 = entry.rank <= 3;
-    const glowOpacity = entry.isPlayer ? playerHighlightAnim : new Animated.Value(0);
-    
+    // Generate fake scores for other players
+    for (let i = 0; i < 30; i++) {
+      entries.push({
+        rank: 0,
+        name: CAPYBARA_NAMES[i % CAPYBARA_NAMES.length] + (Math.floor(i / CAPYBARA_NAMES.length) || ''),
+        score: Math.floor(Math.random() * 5000) + 1000,
+        flow: Math.floor(Math.random() * 30) + 1,
+        avatar: ['🦫', '🌊', '🌿', '☀️', '🏊'][Math.floor(Math.random() * 5)]
+      });
+    }
+
+    // Add current user
+    entries.push({
+      rank: 0,
+      name: username || 'CaBBy',
+      score: stats.totalScore,
+      flow: flowStreak,
+      avatar: '⭐'
+    });
+
+    // Sort by score
+    entries.sort((a, b) => b.score - a.score);
+
+    // Assign ranks
+    entries.forEach((entry, index) => {
+      entry.rank = index + 1;
+    });
+
+    setLeaderboard(entries);
+    const userIndex = entries.findIndex(e => e.name === (username || 'CaBBy'));
+    setUserRank(userIndex + 1);
+  };
+
+  const renderLeaderboardItem = (item: LeaderboardEntry, index: number) => {
+    const isCurrentUser = item.name === (username || 'CaBBy');
+    const isTop3 = item.rank <= 3;
+
     return (
-      <Animated.View
-        key={`${entry.rank}-${entry.name}`}
+      <View 
+        key={index} 
         style={[
-          styles.entryContainer,
-          entry.isPlayer && styles.playerEntry,
-          isTop3 && styles.topEntry,
-          {
-            opacity: fadeAnim,
-            transform: [
-              {
-                translateX: fadeAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [50, 0],
-                }),
-              },
-            ],
-          },
+          styles.leaderboardItem,
+          isCurrentUser && styles.currentUserItem,
+          isTop3 && styles.topItem
         ]}
       >
-        {entry.isPlayer && (
-          <Animated.View
-            style={[
-              styles.playerGlow,
-              {
-                opacity: glowOpacity,
-              },
-            ]}
-          />
-        )}
-        
         <View style={styles.rankContainer}>
           {isTop3 ? (
-            <View style={[styles.medal, styles[`medal${entry.rank}`]]}>
-              <Text style={styles.medalText}>{entry.rank}</Text>
+            <View style={[styles.medal, item.rank === 1 ? styles.medal1 : item.rank === 2 ? styles.medal2 : styles.medal3]}>
+              <Text style={styles.medalText}>{item.rank}</Text>
             </View>
           ) : (
-            <Text style={styles.rankText}>#{entry.rank}</Text>
+            <Text style={styles.rankText}>#{item.rank}</Text>
           )}
         </View>
-        
-        <View style={styles.avatarContainer}>
-          <Text style={styles.avatar}>{entry.avatar}</Text>
-        </View>
-        
+
+        <Text style={styles.avatar}>{item.avatar}</Text>
+
         <View style={styles.playerInfo}>
-          <Text style={[styles.playerName, entry.isPlayer && styles.playerNameHighlight]}>
-            {entry.name} {entry.isPlayer && '(You)'}
+          <Text style={[styles.playerName, isCurrentUser && styles.currentUserName]}>
+            {item.name} {isCurrentUser && '(You)'}
           </Text>
           <View style={styles.statsRow}>
-            <Text style={styles.statText}>
-                              <Icon name="flash-outline" size={12} color="#FFA500" /> {entry.streak} day streak
-            </Text>
-            <Text style={styles.statText}>
-                              <Icon name="help-circle-outline" size={12} color="#FFA500" /> {entry.questionsPerDay} Q/day
-            </Text>
+            <Icon name="flame" size={14} color="#FF9F1C" />
+            <Text style={styles.flowText}>{item.flow} day flow</Text>
           </View>
         </View>
-        
-        <View style={styles.scoreContainer}>
-          <Text style={styles.scoreText}>{entry.score.toLocaleString()}</Text>
-          <Text style={styles.scoreLabel}>points</Text>
-        </View>
-      </Animated.View>
+
+        <Text style={[styles.score, isCurrentUser && styles.currentUserScore]}>
+          {item.score.toLocaleString()}
+        </Text>
+      </View>
     );
   };
-  
-  const handleTabChange = (tab: 'global' | 'weekly' | 'daily') => {
-    setSelectedTab(tab);
-    SoundService.playButtonClick();
-    
-    // Regenerate leaderboard with different scores for different periods
-    const multiplier = tab === 'daily' ? 0.1 : tab === 'weekly' ? 0.3 : 1;
-    const modifiedLeaderboard = leaderboard.map(entry => ({
-      ...entry,
-      score: Math.floor(entry.score * multiplier),
-      questionsPerDay: tab === 'daily' 
-        ? Math.floor(entry.questionsPerDay / 7)
-        : entry.questionsPerDay,
-    }));
-    
-    setLeaderboard(modifiedLeaderboard);
-  };
-  
+
   return (
-    <LinearGradient
-      colors={['#FFD700', '#FFA500', '#FF8C00']}
-      style={styles.container}
-    >
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                        <Icon name="arrow-back-circle" size={30} color="#FFF" />
+          <Icon name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.title}>Leaderboard</Text>
-        <View style={styles.placeholder} />
+        <Text style={styles.headerTitle}>Capybara Leaderboard</Text>
+        <View style={{ width: 44 }} />
       </View>
-      
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, selectedTab === 'global' && styles.activeTab]}
-          onPress={() => handleTabChange('global')}
-        >
-          <Text style={[styles.tabText, selectedTab === 'global' && styles.activeTabText]}>
-            Global
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, selectedTab === 'weekly' && styles.activeTab]}
-          onPress={() => handleTabChange('weekly')}
-        >
-          <Text style={[styles.tabText, selectedTab === 'weekly' && styles.activeTabText]}>
-            Weekly
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, selectedTab === 'daily' && styles.activeTab]}
-          onPress={() => handleTabChange('daily')}
-        >
-          <Text style={[styles.tabText, selectedTab === 'daily' && styles.activeTabText]}>
-            Daily
-          </Text>
-        </TouchableOpacity>
-      </View>
-      
-      <ScrollView
-        ref={scrollRef}
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {leaderboard.map((entry, index) => renderLeaderboardEntry(entry, index))}
+
+      {userRank > 0 && (
+        <View style={styles.userRankCard}>
+          <Text style={styles.userRankLabel}>Your Rank</Text>
+          <Text style={styles.userRankValue}>#{userRank}</Text>
+          <Text style={styles.userRankSubtext}>Keep swimming! 🦫</Text>
+        </View>
+      )}
+
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {leaderboard.map((item, index) => renderLeaderboardItem(item, index))}
       </ScrollView>
-    </LinearGradient>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FFF8E7',
   },
   header: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 20,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FFF',
-    fontFamily: 'Quicksand-Bold',
-  },
-  placeholder: {
-    width: 40,
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    marginHorizontal: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 25,
-    padding: 5,
-    marginBottom: 20,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 20,
-  },
-  activeTab: {
-    backgroundColor: '#FFF',
-  },
-  tabText: {
-    fontSize: 16,
-    color: '#FFF',
-    fontFamily: 'Nunito-Regular',
-  },
-  activeTabText: {
-    color: '#FFA500',
-    fontFamily: 'Nunito-Bold',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 30,
-  },
-  entryContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    borderRadius: 15,
-    padding: 15,
-    marginBottom: 10,
+    paddingVertical: 16,
+    backgroundColor: 'white',
+    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    shadowRadius: 4,
   },
-  playerEntry: {
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFF8E7',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'Roboto-Bold',
+  },
+  userRankCard: {
+    backgroundColor: '#FFB347',
+    margin: 20,
+    padding: 20,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  userRankLabel: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  userRankValue: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: 'white',
+    marginVertical: 4,
+  },
+  userRankSubtext: {
+    fontSize: 16,
+    color: 'white',
+  },
+  scrollView: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  leaderboardItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    marginBottom: 8,
+    padding: 16,
+    borderRadius: 12,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  currentUserItem: {
+    backgroundColor: '#FFE5CC',
     borderWidth: 2,
-    borderColor: '#FFA500',
+    borderColor: '#FFB347',
   },
-  topEntry: {
-    backgroundColor: '#FFF9E6',
-  },
-  playerGlow: {
-    position: 'absolute',
-    top: -2,
-    left: -2,
-    right: -2,
-    bottom: -2,
-    backgroundColor: '#FFA500',
-    borderRadius: 17,
-    opacity: 0.3,
+  topItem: {
+    backgroundColor: '#FFF5E5',
   },
   rankContainer: {
     width: 50,
     alignItems: 'center',
   },
-  rankText: {
-    fontSize: 16,
-    color: '#666',
-    fontFamily: 'Nunito-Bold',
-  },
   medal: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -399,56 +238,50 @@ const styles = StyleSheet.create({
     backgroundColor: '#C0C0C0',
   },
   medal3: {
-    backgroundColor: '#CD7F32',
+    backgroundColor: '#CD853F',
   },
   medalText: {
-    fontSize: 18,
-    color: '#FFF',
-    fontFamily: 'Nunito-Bold',
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: 'white',
   },
-  avatarContainer: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
+  rankText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '600',
   },
   avatar: {
-    fontSize: 30,
+    fontSize: 24,
+    marginHorizontal: 12,
   },
   playerInfo: {
     flex: 1,
   },
   playerName: {
     fontSize: 16,
+    fontWeight: '600',
     color: '#333',
-    fontFamily: 'Nunito-Bold',
+    marginBottom: 2,
   },
-  playerNameHighlight: {
-    color: '#FFA500',
+  currentUserName: {
+    color: '#FF6B6B',
   },
   statsRow: {
     flexDirection: 'row',
-    marginTop: 2,
+    alignItems: 'center',
   },
-  statText: {
+  flowText: {
     fontSize: 12,
     color: '#666',
-    marginRight: 15,
-    fontFamily: 'Nunito-Regular',
+    marginLeft: 4,
   },
-  scoreContainer: {
-    alignItems: 'flex-end',
-  },
-  scoreText: {
-    fontSize: 20,
+  score: {
+    fontSize: 18,
+    fontWeight: 'bold',
     color: '#333',
-    fontFamily: 'Nunito-Bold',
   },
-  scoreLabel: {
-    fontSize: 12,
-    color: '#666',
-    fontFamily: 'Nunito-Regular',
+  currentUserScore: {
+    color: '#FF6B6B',
   },
 });
 

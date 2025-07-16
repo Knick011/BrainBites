@@ -26,6 +26,8 @@ class SoundServiceClass {
   private musicVolume = 0.3;
   private effectsVolume = 0.6;
   private SETTINGS_KEY = '@BrainBites:soundSettings';
+  private soundEnabled = true;
+  private currentMusic: Sound | null = null;
 
   async initialize() {
     // Load sound settings
@@ -67,6 +69,7 @@ class SoundServiceClass {
         this.isMuted = parsed.isMuted || false;
         this.musicVolume = parsed.musicVolume || 0.3;
         this.effectsVolume = parsed.effectsVolume || 0.6;
+        this.soundEnabled = parsed.soundEnabled || true;
       }
     } catch (error) {
       console.error('Failed to load sound settings:', error);
@@ -81,6 +84,7 @@ class SoundServiceClass {
           isMuted: this.isMuted,
           musicVolume: this.musicVolume,
           effectsVolume: this.effectsVolume,
+          soundEnabled: this.soundEnabled,
         })
       );
     } catch (error) {
@@ -122,18 +126,41 @@ class SoundServiceClass {
   }
 
   playStreak() {
-    this.playSound('streak');
+    if (this.soundEnabled && this.sounds.streak) {
+      this.sounds.streak.setVolume(this.effectsVolume);
+      this.sounds.streak.play();
+    }
+  }
+
+  playTimerWarning() {
+    if (this.soundEnabled && this.sounds.buttonClick) {
+      this.sounds.buttonClick.setVolume(this.effectsVolume);
+      this.sounds.buttonClick.play();
+    }
   }
 
   playGameMusic() {
-    if (!this.isMuted && this.sounds.gamemusic) {
-      this.sounds.gamemusic.play();
+    if (this.soundEnabled && this.sounds.gamemusic) {
+      this.stopAllMusic();
+      this.currentMusic = this.sounds.gamemusic;
+      this.currentMusic.setVolume(this.musicVolume);
+      this.currentMusic.play();
     }
   }
 
   playMenuMusic() {
-    if (!this.isMuted && this.sounds.menumusic) {
-      this.sounds.menumusic.play();
+    if (this.soundEnabled && this.sounds.menumusic) {
+      this.stopAllMusic();
+      this.currentMusic = this.sounds.menumusic;
+      this.currentMusic.setVolume(this.musicVolume);
+      this.currentMusic.play();
+    }
+  }
+
+  stopAllMusic() {
+    if (this.currentMusic) {
+      this.currentMusic.stop();
+      this.currentMusic = null;
     }
   }
 
@@ -184,7 +211,27 @@ class SoundServiceClass {
   }
 
   setEffectsVolume(volume: number) {
-    this.effectsVolume = Math.max(0, Math.min(1, volume));
+    this.effectsVolume = volume;
+    this.saveSettings();
+  }
+
+  isSoundEnabled() {
+    return this.soundEnabled;
+  }
+
+  getMusicVolume() {
+    return this.musicVolume;
+  }
+
+  getEffectsVolume() {
+    return this.effectsVolume;
+  }
+
+  setSoundEnabled(enabled: boolean) {
+    this.soundEnabled = enabled;
+    if (!enabled) {
+      this.stopAllMusic();
+    }
     this.saveSettings();
   }
 

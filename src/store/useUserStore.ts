@@ -4,6 +4,7 @@ import { startOfDay, differenceInDays } from 'date-fns';
 
 interface DailyGoal {
   id: string;
+  title: string;
   description: string;
   target: number;
   current: number;
@@ -51,6 +52,8 @@ interface UserState {
   loadData: () => Promise<void>;
   initializeApp: () => Promise<void>;
   updateLeaderboardRank: () => void;
+  generateDailyGoals: () => void;
+  resetProgress: () => Promise<void>;
 }
 
 const STORAGE_KEY = '@BrainBites:userData';
@@ -212,6 +215,7 @@ export const useUserStore = create<UserState>((set, get) => ({
     const goals: DailyGoal[] = [
       {
         id: '1',
+        title: 'Answer 15 questions correctly',
         description: 'Answer 15 questions correctly',
         target: 15,
         current: 0,
@@ -221,6 +225,7 @@ export const useUserStore = create<UserState>((set, get) => ({
       },
       {
         id: '2',
+        title: 'Achieve a 10 question streak',
         description: 'Achieve a 10 question streak',
         target: 10,
         current: 0,
@@ -230,6 +235,7 @@ export const useUserStore = create<UserState>((set, get) => ({
       },
       {
         id: '3',
+        title: 'Maintain 80% accuracy',
         description: 'Maintain 80% accuracy',
         target: 80,
         current: 0,
@@ -239,6 +245,7 @@ export const useUserStore = create<UserState>((set, get) => ({
       },
       {
         id: '4',
+        title: 'Study for 30 minutes',
         description: 'Study for 30 minutes',
         target: 30,
         current: 0,
@@ -294,5 +301,37 @@ export const useUserStore = create<UserState>((set, get) => ({
     }
     
     get().updateLeaderboardRank();
+  },
+
+  resetProgress: async () => {
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEY);
+      set({
+        username: 'CaBBy',
+        isFirstTime: false,
+        stats: {
+          totalScore: 0,
+          totalQuestionsAnswered: 0,
+          correctAnswers: 0,
+          bestStreak: 0,
+          dailyStreak: 0,
+          lastPlayedDate: new Date().toISOString(),
+          totalPlayTime: 0,
+          categoriesPlayed: {},
+          difficultyStats: {
+            easy: { correct: 0, total: 0 },
+            medium: { correct: 0, total: 0 },
+            hard: { correct: 0, total: 0 },
+          },
+          leaderboardRank: 9999,
+        },
+        dailyGoals: [],
+        flowStreak: 0,
+        lastFlowDate: '',
+      });
+      console.log('User progress reset successfully.');
+    } catch (error) {
+      console.error('Failed to reset user progress:', error);
+    }
   },
 }));

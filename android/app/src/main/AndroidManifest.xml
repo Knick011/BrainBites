@@ -51,5 +51,15 @@
           <action android:name="android.intent.action.QUICKBOOT_POWERON" />
         </intent-filter>
       </receiver>
+
+        <service
+            android:name=".PowerManagerModule"
+            android:enabled="true"
+            android:exported="false" />
+        <service
+            android:name=".TimerService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 </manifest>
