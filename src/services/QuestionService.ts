@@ -1,6 +1,5 @@
-import RNFS from 'react-native-fs';
-import Papa from 'papaparse';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { questionsCSV } from '../assets/data/questionsData';
 
 export interface Question {
   id: string;
@@ -21,32 +20,86 @@ class QuestionServiceClass {
   private questionsByDifficulty: Map<string, Question[]> = new Map();
   private usedQuestionIds: Set<string> = new Set();
   private STORAGE_KEY = '@BrainBites:usedQuestions';
+  private isLoaded = false;
 
   async loadQuestions() {
     try {
-      // For React Native, we need to import the CSV file differently
-      // Since we can't use RNFS.MainBundlePath, we'll use the sample questions
-      // In a real app, you would fetch this from an API or bundle it differently
-      
       console.log('Loading questions...');
       
-      // For now, use the sample questions
-      this.loadSampleQuestions();
+      // Load questions from the embedded CSV data
+      this.parseCSVString(questionsCSV);
+      console.log(`Loaded ${this.questions.length} questions from embedded data`);
       
-      // In production, you would do something like:
-      // const response = await fetch('your-api-endpoint/questions.csv');
-      // const csvText = await response.text();
-      // Then parse the CSV text
+      this.isLoaded = true;
       
       // Load used questions from storage
       await this.loadUsedQuestions();
 
-      console.log(`Loaded ${this.questions.length} questions`);
+      console.log(`Total questions available: ${this.questions.length}`);
+      return true;
     } catch (error) {
       console.error('Failed to load questions:', error);
-      // Fallback to sample questions if CSV fails
+      // Fallback to sample questions if anything fails
       this.loadSampleQuestions();
+      this.isLoaded = true;
+      return false;
     }
+  }
+
+  private parseCSVString(csvContent: string) {
+    const lines = csvContent.split('\n');
+    const headers = lines[0].split(',').map(h => h.trim().replace(/['"]/g, ''));
+    
+    console.log('CSV headers:', headers);
+    
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      
+      const values = this.parseCSVLine(line);
+      if (values.length < headers.length) continue;
+      
+      const question: Question = {
+        id: values[0] || `q_${i}`,
+        category: values[1] || 'General',
+        question: values[2] || '',
+        optionA: values[3] || '',
+        optionB: values[4] || '',
+        optionC: values[5] || '',
+        optionD: values[6] || '',
+        correctAnswer: values[7] || values[3],
+        explanation: values[8] || 'No explanation provided.',
+        level: (values[9]?.toLowerCase() as 'easy' | 'medium' | 'hard') || 'medium',
+      };
+      
+      if (question.question) {
+        this.questions.push(question);
+      }
+    }
+    
+    this.organizeQuestions();
+  }
+
+  private parseCSVLine(line: string): string[] {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    
+    result.push(current.trim());
+    return result.map(item => item.replace(/^"|"$/g, ''));
   }
 
   private organizeQuestions() {
@@ -94,12 +147,17 @@ class QuestionServiceClass {
     category?: string,
     difficulty?: 'easy' | 'medium' | 'hard'
   ): Promise<Question | null> {
+    // Ensure questions are loaded
+    if (!this.isLoaded) {
+      await this.loadQuestions();
+    }
+
     let availableQuestions = [...this.questions];
 
     // Filter by category if specified
-    if (category) {
+    if (category && category !== 'general') {
       availableQuestions = availableQuestions.filter(
-        (q) => q.category === category
+        (q) => q.category.toLowerCase() === category.toLowerCase()
       );
     }
 
@@ -117,6 +175,7 @@ class QuestionServiceClass {
 
     // If all questions have been used, reset
     if (availableQuestions.length === 0) {
+      console.log('All questions used, resetting...');
       this.usedQuestionIds.clear();
       await this.saveUsedQuestions();
       return this.getRandomQuestion(category, difficulty);
@@ -130,10 +189,14 @@ class QuestionServiceClass {
     this.usedQuestionIds.add(question.id);
     await this.saveUsedQuestions();
 
+    console.log(`Selected question: ${question.question}`);
     return question;
   }
 
   getCategories(): string[] {
+    if (!this.isLoaded) {
+      return ['Science', 'Mathematics', 'History', 'Geography', 'Literature', 'General'];
+    }
     return Array.from(this.questionsByCategory.keys()).sort();
   }
 
@@ -189,10 +252,22 @@ class QuestionServiceClass {
         explanation: 'The skin is the largest organ, covering about 20 square feet in adults.',
         level: 'medium',
       },
+      {
+        id: '4',
+        category: 'Science',
+        question: 'What is the speed of light in vacuum?',
+        optionA: '299,792,458 m/s',
+        optionB: '300,000,000 m/s',
+        optionC: '150,000,000 m/s',
+        optionD: '500,000,000 m/s',
+        correctAnswer: '299,792,458 m/s',
+        explanation: 'The speed of light in vacuum is exactly 299,792,458 meters per second.',
+        level: 'hard',
+      },
       
       // Mathematics Questions
       {
-        id: '4',
+        id: '5',
         category: 'Mathematics',
         question: 'What is the value of π (pi) to two decimal places?',
         optionA: '3.12',
@@ -204,7 +279,7 @@ class QuestionServiceClass {
         level: 'easy',
       },
       {
-        id: '5',
+        id: '6',
         category: 'Mathematics',
         question: 'What is 15% of 200?',
         optionA: '20',
@@ -216,7 +291,7 @@ class QuestionServiceClass {
         level: 'easy',
       },
       {
-        id: '6',
+        id: '7',
         category: 'Mathematics',
         question: 'What is the square root of 144?',
         optionA: '10',
@@ -227,10 +302,22 @@ class QuestionServiceClass {
         explanation: '12 × 12 = 144, so √144 = 12',
         level: 'medium',
       },
+      {
+        id: '8',
+        category: 'Mathematics',
+        question: 'What is the derivative of x²?',
+        optionA: 'x',
+        optionB: '2x',
+        optionC: 'x²/2',
+        optionD: '2x²',
+        correctAnswer: '2x',
+        explanation: 'Using the power rule: d/dx(x²) = 2x¹ = 2x',
+        level: 'hard',
+      },
       
       // History Questions
       {
-        id: '7',
+        id: '9',
         category: 'History',
         question: 'In which year did World War II end?',
         optionA: '1943',
@@ -242,7 +329,7 @@ class QuestionServiceClass {
         level: 'medium',
       },
       {
-        id: '8',
+        id: '10',
         category: 'History',
         question: 'Who was the first President of the United States?',
         optionA: 'Thomas Jefferson',
@@ -253,10 +340,22 @@ class QuestionServiceClass {
         explanation: 'George Washington served as the first U.S. President from 1789 to 1797.',
         level: 'easy',
       },
+      {
+        id: '11',
+        category: 'History',
+        question: 'The Battle of Hastings took place in which year?',
+        optionA: '1066',
+        optionB: '1067',
+        optionC: '1065',
+        optionD: '1068',
+        correctAnswer: '1066',
+        explanation: 'The Battle of Hastings was fought on 14 October 1066.',
+        level: 'hard',
+      },
       
       // Geography Questions
       {
-        id: '9',
+        id: '12',
         category: 'Geography',
         question: 'What is the capital of Australia?',
         optionA: 'Sydney',
@@ -268,7 +367,7 @@ class QuestionServiceClass {
         level: 'medium',
       },
       {
-        id: '10',
+        id: '13',
         category: 'Geography',
         question: 'Which is the longest river in the world?',
         optionA: 'Amazon',
@@ -279,10 +378,22 @@ class QuestionServiceClass {
         explanation: 'The Nile River in Africa is approximately 6,650 kilometers long.',
         level: 'medium',
       },
+      {
+        id: '14',
+        category: 'Geography',
+        question: 'What is the smallest country in the world?',
+        optionA: 'Monaco',
+        optionB: 'Vatican City',
+        optionC: 'San Marino',
+        optionD: 'Liechtenstein',
+        correctAnswer: 'Vatican City',
+        explanation: 'Vatican City is the smallest sovereign nation with an area of 0.17 square miles.',
+        level: 'easy',
+      },
       
       // Literature Questions
       {
-        id: '11',
+        id: '15',
         category: 'Literature',
         question: 'Who wrote "Romeo and Juliet"?',
         optionA: 'Charles Dickens',
@@ -294,7 +405,7 @@ class QuestionServiceClass {
         level: 'easy',
       },
       {
-        id: '12',
+        id: '16',
         category: 'Literature',
         question: 'Which novel begins with "Call me Ishmael"?',
         optionA: 'The Great Gatsby',
@@ -305,10 +416,22 @@ class QuestionServiceClass {
         explanation: 'This famous opening line is from Herman Melville\'s "Moby Dick".',
         level: 'hard',
       },
+      {
+        id: '17',
+        category: 'Literature',
+        question: 'Who wrote "Pride and Prejudice"?',
+        optionA: 'Charlotte Brontë',
+        optionB: 'Emily Brontë',
+        optionC: 'Jane Austen',
+        optionD: 'George Eliot',
+        correctAnswer: 'Jane Austen',
+        explanation: 'Jane Austen published "Pride and Prejudice" in 1813.',
+        level: 'medium',
+      },
       
       // General Knowledge
       {
-        id: '13',
+        id: '18',
         category: 'General',
         question: 'How many days are there in a leap year?',
         optionA: '364',
@@ -320,7 +443,7 @@ class QuestionServiceClass {
         level: 'easy',
       },
       {
-        id: '14',
+        id: '19',
         category: 'General',
         question: 'What is the smallest prime number?',
         optionA: '0',
@@ -332,7 +455,7 @@ class QuestionServiceClass {
         level: 'medium',
       },
       {
-        id: '15',
+        id: '20',
         category: 'General',
         question: 'How many continents are there?',
         optionA: '5',
@@ -343,7 +466,33 @@ class QuestionServiceClass {
         explanation: 'The seven continents are: Africa, Antarctica, Asia, Australia, Europe, North America, and South America.',
         level: 'easy',
       },
+      {
+        id: '21',
+        category: 'General',
+        question: 'What is the currency of Japan?',
+        optionA: 'Yuan',
+        optionB: 'Won',
+        optionC: 'Yen',
+        optionD: 'Ringgit',
+        correctAnswer: 'Yen',
+        explanation: 'The Japanese yen is the official currency of Japan.',
+        level: 'medium',
+      },
+      {
+        id: '22',
+        category: 'General',
+        question: 'Which element has the chemical symbol "Au"?',
+        optionA: 'Silver',
+        optionB: 'Gold',
+        optionC: 'Aluminum',
+        optionD: 'Argon',
+        correctAnswer: 'Gold',
+        explanation: 'Au comes from the Latin word "aurum" meaning gold.',
+        level: 'hard',
+      },
     ];
+    
+    console.log('Sample questions loaded:', this.questions.length);
     this.organizeQuestions();
   }
 
@@ -351,6 +500,11 @@ class QuestionServiceClass {
   async resetUsedQuestions() {
     this.usedQuestionIds.clear();
     await this.saveUsedQuestions();
+  }
+
+  // Check if service is ready
+  isReady(): boolean {
+    return this.isLoaded && this.questions.length > 0;
   }
 }
 

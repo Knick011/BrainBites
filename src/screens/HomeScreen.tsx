@@ -11,9 +11,13 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { RootStackParamList } from '../../App';
 import { useUserStore } from '../store/useUserStore';
 import { SoundService } from '../services/SoundService';
 import DailyFlowCard from '../components/DailyFlowCard';
+
+type NavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;
 
 const DIFFICULTY_LEVELS = [
   {
@@ -46,7 +50,7 @@ const DIFFICULTY_LEVELS = [
 ];
 
 const HomeScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp>();
   const { flowStreak, username, dailyGoals } = useUserStore();
   const [greeting, setGreeting] = useState('');
 
@@ -59,7 +63,10 @@ const HomeScreen: React.FC = () => {
 
   const handleDifficultyPress = (difficulty: typeof DIFFICULTY_LEVELS[0]) => {
     SoundService.playButtonClick();
-    navigation.navigate('Categories', { difficulty: difficulty.id });
+    navigation.navigate('Quiz', { 
+      difficulty: difficulty.id as 'easy' | 'medium' | 'hard',
+      category: undefined // No category filter, only difficulty
+    });
   };
 
   const handleSettingsPress = () => {

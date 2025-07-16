@@ -11,21 +11,21 @@ interface QuizQuestionProps {
 
 export const QuizQuestion: React.FC<QuizQuestionProps> = ({ question, questionNumber }) => {
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.questionNumber}>Question {questionNumber}</Text>
-        <View style={[styles.difficultyBadge, styles[`${question.level}Badge`]]}>
-          <Text style={styles.difficultyText}>{question.level.toUpperCase()}</Text>
+    <View style={questionStyles.container}>
+      <View style={questionStyles.header}>
+        <Text style={questionStyles.questionNumber}>Question {questionNumber}</Text>
+        <View style={[questionStyles.difficultyBadge, questionStyles[`${question.level}Badge`]]}>
+          <Text style={questionStyles.difficultyText}>{question.level.toUpperCase()}</Text>
         </View>
       </View>
-      <View style={styles.questionCard}>
-        <Text style={styles.questionText}>{question.question}</Text>
+      <View style={questionStyles.questionCard}>
+        <Text style={questionStyles.questionText}>{question.question}</Text>
       </View>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const questionStyles = StyleSheet.create({
   container: {
     marginBottom: 20,
   },
@@ -42,8 +42,13 @@ const styles = StyleSheet.create({
   },
   difficultyBadge: {
     paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
   },
   easyBadge: {
     backgroundColor: '#4CAF50',
@@ -63,23 +68,25 @@ const styles = StyleSheet.create({
   questionCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 20,
-    padding: 20,
+    padding: 25,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowRadius: 6,
     elevation: 5,
+    minHeight: 120,
+    justifyContent: 'center',
   },
   questionText: {
     fontSize: 18,
     color: '#333',
     lineHeight: 26,
-    fontFamily: 'Nunito-Regular',
+    fontFamily: 'Nunito-Bold',
+    textAlign: 'center',
   },
 });
 
 // QuizOptions.tsx
-
 
 interface QuizOptionsProps {
   options: string[];
@@ -122,16 +129,16 @@ export const QuizOptions: React.FC<QuizOptionsProps> = ({
 
   const getOptionStyle = (option: string) => {
     if (!showResult) {
-      return selectedAnswer === option ? styles.selectedOption : {};
+      return selectedAnswer === option ? optionStyles.selectedOption : {};
     }
 
     if (option === correctAnswer) {
-      return styles.correctOption;
+      return optionStyles.correctOption;
     }
     if (option === selectedAnswer && option !== correctAnswer) {
-      return styles.incorrectOption;
+      return optionStyles.incorrectOption;
     }
-    return styles.disabledOption;
+    return optionStyles.disabledOption;
   };
 
   const getOptionIcon = (option: string) => {
@@ -147,7 +154,7 @@ export const QuizOptions: React.FC<QuizOptionsProps> = ({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={optionStyles.container}>
       {options.map((option, index) => (
         <Animated.View
           key={index}
@@ -163,11 +170,11 @@ export const QuizOptions: React.FC<QuizOptionsProps> = ({
           }}
         >
           <TouchableOpacity
-            style={[styles.optionButton, getOptionStyle(option)]}
+            style={[optionStyles.optionButton, getOptionStyle(option)]}
             onPress={() => handleSelectOption(option, index)}
             disabled={showResult}
           >
-            <Text style={[styles.optionText, showResult && styles.resultText]}>
+            <Text style={[optionStyles.optionText, showResult && optionStyles.resultText]}>
               {String.fromCharCode(65 + index)}. {option}
             </Text>
             {getOptionIcon(option)}
@@ -251,64 +258,59 @@ export const StreakIndicator: React.FC<StreakIndicatorProps> = ({ streak }) => {
             useNativeDriver: true,
           }),
         ]),
-        Animated.timing(rotateAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        rotateAnim.setValue(0);
-      });
+        Animated.sequence([
+          Animated.timing(rotateAnim, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(rotateAnim, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]).start();
     }
   }, [streak]);
-
-  const spin = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-
-  if (streak === 0) {
-    return null;
-  }
 
   return (
     <Animated.View
       style={[
-        styles.container,
+        streakStyles.container,
         {
           transform: [
             { scale: scaleAnim },
-            { rotate: spin },
+            {
+              rotate: rotateAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: ['0deg', '360deg'],
+              }),
+            },
           ],
         },
       ]}
     >
-      <Icon name="flame" size={24} color="#FFF" />
-      <Text style={styles.streakText}>{streak}</Text>
+      <Icon name="flame" size={24} color="#FF6B35" />
+      <Text style={streakStyles.streakText}>{streak}</Text>
     </Animated.View>
   );
 };
 
 const streakStyles = StyleSheet.create({
   container: {
-    backgroundColor: '#FF6347',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
   },
   streakText: {
     fontSize: 16,
-    fontWeight: 'bold',
     color: '#FFF',
     fontFamily: 'Nunito-Bold',
+    marginLeft: 4,
   },
 });
 

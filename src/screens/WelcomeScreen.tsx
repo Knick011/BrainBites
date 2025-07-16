@@ -17,7 +17,6 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../App';
 import { useUserStore } from '../store/useUserStore';
 import { SoundService } from '../services/SoundService';
-import Mascot from '../components/Mascot/Mascot';
 
 const { width, height } = Dimensions.get('window');
 
@@ -379,10 +378,9 @@ const WelcomeScreen: React.FC = () => {
         </View>
       </Animated.View>
       
-      {/* Mascot */}
+      {/* Mascot Message */}
       {showMascot && (
         <View style={styles.mascotOverlay}>
-          <Mascot type={mascotType} />
           <View style={styles.mascotMessage}>
             <Text style={styles.mascotMessageText}>{mascotMessage}</Text>
             <TouchableOpacity onPress={handleMascotDismiss} style={styles.dismissButton}>

@@ -51,35 +51,43 @@ const QuizOptions: React.FC<QuizOptionsProps> = ({
 const styles = StyleSheet.create({
   container: {
     marginTop: 20,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
   },
   optionButton: {
+    width: '48%',
     marginVertical: 8,
     paddingVertical: 15,
-    paddingHorizontal: 20,
-    borderRadius: 12,
+    paddingHorizontal: 15,
+    borderRadius: 15,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 60,
   },
   option: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
   },
   selectedOption: {
-    backgroundColor: '#C8B3FF',
+    backgroundColor: '#FF9F1C',
   },
   correctOption: {
-    backgroundColor: '#98E4A6',
+    backgroundColor: '#4CAF50',
   },
   incorrectOption: {
-    backgroundColor: '#FFB3B3',
+    backgroundColor: '#F44336',
   },
   optionText: {
     fontSize: 16,
-    color: '#4A4A4A',
+    color: '#333',
     textAlign: 'center',
-    fontFamily: 'Nunito-Regular',
+    fontFamily: 'Nunito-Bold',
+    lineHeight: 20,
   },
 });
 

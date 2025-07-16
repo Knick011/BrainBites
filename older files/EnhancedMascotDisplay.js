@@ -1,99 +1,34 @@
+// src/components/mascot/EnhancedMascotDisplay.js - Fixed version with original quiz functionality
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  View,
-  StyleSheet,
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  Animated, 
+  Easing,
   Image,
-  TouchableOpacity,
-  Animated,
   Dimensions,
-  Text,
   TouchableWithoutFeedback,
   Platform,
+  TouchableOpacity
 } from 'react-native';
-import { Easing } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SoundService } from '../../services/SoundService';
-import { useQuizStore } from '../../store/useQuizStore';
-import { useUserStore } from '../../store/useUserStore';
-import { useTimerStore } from '../../store/useTimerStore';
 import theme from '../../styles/theme';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-interface MascotProps {
-  forceShow?: boolean;
-  type?: 'happy' | 'sad' | 'excited' | 'gamemode' | 'depressed' | 'peeking';
-  position?: 'left' | 'right';
-  showMascot?: boolean;
-  message?: string | null;
-  autoHide?: boolean;
-  autoHideDuration?: number;
-  onDismiss?: () => void;
-  onMessageComplete?: () => void;
-  fullScreen?: boolean;
-  mascotEnabled?: boolean;
-  onPeekingPress?: () => void;
-  showExplanation?: boolean;
-  isCorrect?: boolean | null;
-  isQuizScreen?: boolean;
-  currentQuestion?: any;
-  selectedAnswer?: string | null;
-}
-
-type MascotMood = 'peeking' | 'happy' | 'sad' | 'excited' | 'gamemode' | 'depressed';
-
-const MASCOT_MESSAGES = {
-  greeting: [
-    "Hi! I'm CaBBY! Ready to exercise that brain?",
-    "CaBBY here! Let's make learning fun!",
-    "Hello friend! Time for some BrainBites!",
-  ],
-  encouragement: [
-    "You're doing great! Keep it up!",
-    "Wow! Your brain is on fire today!",
-    "Amazing work! I'm so proud of you!",
-  ],
-  correct: [
-    "Fantastic! You nailed it!",
-    "Brilliant! That's the right answer!",
-    "You're a genius! Well done!",
-  ],
-  incorrect: [
-    "Don't worry! Mistakes help us learn!",
-    "Almost there! Let's try another one!",
-    "Keep trying! You'll get the next one!",
-  ],
-  streak: [
-    "Incredible streak! You're unstoppable!",
-    "On fire! Keep that streak going!",
-    "Streak master! You're amazing!",
-  ],
-  timerWarning: [
-    "Hurry! Time's running low!",
-    "Quick! The timer's almost up!",
-    "Focus! You can do this!",
-  ],
-  stats: (stats: any) => [
-    `You've answered ${stats.totalQuestions} questions! ${stats.accuracy}% accuracy!`,
-    `Current streak: ${stats.currentStreak}! Best: ${stats.bestStreak}!`,
-    `You're ranked #${stats.rank} on the leaderboard!`,
-  ],
-};
+// Get screen dimensions for positioning
+const { width, height } = Dimensions.get('window');
 
 // Map mascot types to image paths
 const MASCOT_IMAGES = {
-  happy: require('../../assets/mascot/happy.png'),
-  sad: require('../../assets/mascot/sad.png'),
-  excited: require('../../assets/mascot/excited.png'),
-  depressed: require('../../assets/mascot/depressed.png'),
-  gamemode: require('../../assets/mascot/gamemode.png'),
-  below: require('../../assets/mascot/below.png'),
-  peeking: require('../../assets/mascot/below.png'),
+  happy: require('../../assets/images/mascot/happy.png'),
+  sad: require('../../assets/images/mascot/sad.png'),
+  excited: require('../../assets/images/mascot/excited.png'),
+  depressed: require('../../assets/images/mascot/depressed.png'),
+  gamemode: require('../../assets/images/mascot/gamemode.png'),
+  below: require('../../assets/images/mascot/below.png'),
 };
 
-const Mascot: React.FC<MascotProps> = ({ 
-  forceShow = false,
-  type = 'peeking',
+const EnhancedMascotDisplay = ({ 
+  type = 'happy', 
   position = 'left',
   showMascot = true,
   message = null,
@@ -106,23 +41,15 @@ const Mascot: React.FC<MascotProps> = ({
   onPeekingPress = null,
   showExplanation = false,
   isCorrect = null,
+  // Quiz-specific props
   isQuizScreen = false,
   currentQuestion = null,
   selectedAnswer = null
 }) => {
-  const [mood, setMood] = useState<MascotMood>('peeking');
-  const [showDialogue, setShowDialogue] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
   const [displayedMessage, setDisplayedMessage] = useState(message);
   const [showOverlay, setShowOverlay] = useState(false);
-  const [isVisible, setIsVisible] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
-  const [typedMessage, setTypedMessage] = useState('');
-
-  const quizState = useQuizStore();
-  const userStats = useUserStore((state) => state.stats);
-  const timerState = useTimerStore();
-  const insets = useSafeAreaInsets();
-
+  
   // Animation values - more refined for smoother animations
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const mascotAnim = useRef(new Animated.Value(0)).current;
@@ -131,49 +58,25 @@ const Mascot: React.FC<MascotProps> = ({
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   
   // Timing controls
-  const hideTimer = useRef<NodeJS.Timeout | null>(null);
-  const bounceTimer = useRef<Animated.CompositeAnimation | null>(null);
-
+  const hideTimer = useRef(null);
+  const bounceTimer = useRef(null);
+  
+  // Handle message changes with smooth transitions
   useEffect(() => {
-    // Handle message changes with smooth transitions
     handleNewMessage(message);
   }, [message]);
-
-  useEffect(() => {
-    // React to quiz events
-    if (quizState.lastAnswerCorrect !== null) {
-      if (quizState.lastAnswerCorrect) {
-        handleCorrectAnswer();
-      } else {
-        handleIncorrectAnswer();
-      }
-    }
-  }, [quizState.lastAnswerCorrect]);
-
-  useEffect(() => {
-    // Timer warnings
-    if (timerState.remainingTime < 60000 && timerState.remainingTime > 0) {
-      showTimerWarning();
-    }
-  }, [timerState.remainingTime]);
-
+  
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (hideTimer.current) {
-        clearTimeout(hideTimer.current);
-      }
-      if (bounceTimer.current) {
-        bounceTimer.current.stop();
-      }
+      clearTimeout(hideTimer.current);
+      clearTimeout(bounceTimer.current);
     };
   }, []);
-
-  const handleNewMessage = (newMessage: string | null) => {
+  
+  const handleNewMessage = (newMessage) => {
     // Clear existing timers
-    if (hideTimer.current) {
-      clearTimeout(hideTimer.current);
-    }
+    clearTimeout(hideTimer.current);
     
     if (newMessage && newMessage !== displayedMessage) {
       setDisplayedMessage(newMessage);
@@ -189,7 +92,7 @@ const Mascot: React.FC<MascotProps> = ({
       hideMascot();
     }
   };
-
+  
   const showMascotWithMessage = () => {
     if (fullScreen) {
       setShowOverlay(true);
@@ -228,7 +131,7 @@ const Mascot: React.FC<MascotProps> = ({
       startBreathingAnimation();
     });
   };
-
+  
   const showSpeechBubble = () => {
     Animated.spring(bubbleAnim, {
       toValue: 1,
@@ -237,7 +140,7 @@ const Mascot: React.FC<MascotProps> = ({
       useNativeDriver: true,
     }).start();
   };
-
+  
   const startBreathingAnimation = () => {
     // Very subtle breathing animation
     const breathingSequence = Animated.loop(
@@ -260,7 +163,7 @@ const Mascot: React.FC<MascotProps> = ({
     breathingSequence.start();
     bounceTimer.current = breathingSequence;
   };
-
+  
   const hideMascot = () => {
     // Stop breathing animation
     if (bounceTimer.current) {
@@ -315,14 +218,12 @@ const Mascot: React.FC<MascotProps> = ({
       }, 0);
     });
   };
-
+  
   const handleScreenTap = () => {
-    if (hideTimer.current) {
-      clearTimeout(hideTimer.current);
-    }
+    clearTimeout(hideTimer.current);
     hideMascot();
   };
-
+  
   // Handle peeking mascot press - QUIZ SPECIFIC FUNCTIONALITY
   const handlePeekingMascotPress = () => {
     if (isQuizScreen && currentQuestion) {
@@ -337,32 +238,9 @@ const Mascot: React.FC<MascotProps> = ({
     } else if (onPeekingPress) {
       // Non-quiz screen functionality (like home screen time display)
       onPeekingPress();
-    } else {
-      // Default behavior - show stats or greeting
-      SoundService.playButtonClick();
-      
-      if (!showDialogue) {
-        const stats = {
-          totalQuestions: userStats.totalQuestionsAnswered,
-          accuracy: Math.round((userStats.correctAnswers / Math.max(1, userStats.totalQuestionsAnswered)) * 100),
-          currentStreak: quizState.currentStreak,
-          bestStreak: userStats.bestStreak,
-          rank: userStats.leaderboardRank,
-        };
-        
-        const messages = Math.random() > 0.5 
-          ? MASCOT_MESSAGES.greeting 
-          : MASCOT_MESSAGES.stats(stats);
-        
-        showMessage(messages[Math.floor(Math.random() * messages.length)]);
-        setMood('excited');
-      } else {
-        setShowDialogue(false);
-        setMood('peeking');
-      }
     }
   };
-
+  
   // Handle sad mascot press in quiz - show explanation
   const handleSadMascotPress = () => {
     if (isQuizScreen && type === 'sad' && selectedAnswer && !isCorrect && onPeekingPress) {
@@ -370,43 +248,7 @@ const Mascot: React.FC<MascotProps> = ({
       onPeekingPress();
     }
   };
-
-  const handleCorrectAnswer = () => {
-    setMood('happy');
-    const messages = MASCOT_MESSAGES.correct;
-    showMessage(messages[Math.floor(Math.random() * messages.length)]);
-  };
-
-  const handleIncorrectAnswer = () => {
-    setMood('sad');
-    showMessage(MASCOT_MESSAGES.incorrect[Math.floor(Math.random() * MASCOT_MESSAGES.incorrect.length)]);
-  };
-
-  const showTimerWarning = () => {
-    setMood('gamemode');
-    const messages = MASCOT_MESSAGES.timerWarning;
-    showMessage(messages[Math.floor(Math.random() * messages.length)]);
-  };
-
-  const showMessage = (msg: string) => {
-    setDisplayedMessage(msg);
-    setShowDialogue(true);
-    setIsTyping(true);
-    setTypedMessage('');
-
-    // Typewriter effect
-    let index = 0;
-    const typewriterInterval = setInterval(() => {
-      if (index < msg.length) {
-        setTypedMessage((prev) => prev + msg[index]);
-        index++;
-      } else {
-        clearInterval(typewriterInterval);
-        setIsTyping(false);
-      }
-    }, 30);
-  };
-
+  
   // Get mascot transform with smooth animations
   const getMascotTransform = () => {
     return [
@@ -434,7 +276,7 @@ const Mascot: React.FC<MascotProps> = ({
       }
     ];
   };
-
+  
   // Get speech bubble transform
   const getBubbleTransform = () => {
     return [
@@ -452,12 +294,12 @@ const Mascot: React.FC<MascotProps> = ({
       }
     ];
   };
-
+  
   // Get appropriate mascot image
   const getMascotImage = () => {
     return MASCOT_IMAGES[type] || MASCOT_IMAGES.happy;
   };
-
+  
   // Don't render if not visible
   if (!isVisible && !showOverlay) {
     // Always show peeking mascot when main mascot is not visible
@@ -557,148 +399,111 @@ const Mascot: React.FC<MascotProps> = ({
 };
 
 const styles = StyleSheet.create({
-  peekingContainer: {
-    position: 'absolute',
-    bottom: -58,
-    left: -58,
-    zIndex: 50,
-  },
-  forceShow: {
-    zIndex: 2000,
-  },
-  peekingMascot: {
-    width: 180,
-    height: 180,
-    overflow: 'hidden',
-  },
-  peekingImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'contain',
-  },
   fullScreenContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
     zIndex: 1000,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   mascotContainer: {
-    width: '100%',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     position: 'absolute',
     bottom: 0,
+    left: 0,
+    right: 0,
+    height: 297,
+    overflow: 'hidden',
   },
   mascotWrapper: {
-    width: 200,
-    height: 200,
-    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    height: 540,
+    marginTop: 0,
   },
   mascotLeft: {
-    left: 0,
+    marginLeft: -50,
   },
   mascotRight: {
-    right: 0,
+    marginRight: -50,
   },
   mascotImageContainer: {
-    width: '100%',
-    height: '100%',
+    width: 450,
+    height: 540,
     justifyContent: 'center',
     alignItems: 'center',
   },
   mascotImage: {
     width: '100%',
     height: '100%',
-    resizeMode: 'contain',
   },
   speechBubble: {
-    backgroundColor: '#FFF',
-    borderRadius: 20,
+    position: 'absolute',
+    backgroundColor: theme.colors.background,
+    borderRadius: 24,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
-    width: 320,
-    alignItems: 'center',
+    minWidth: 250,
+    maxWidth: 320,
+    borderWidth: 3,
+    borderColor: theme.colors.primary,
+    bottom: '25%',
+    zIndex: 1002,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.25,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   speechText: {
-    fontSize: 16,
-    color: '#333',
-    fontFamily: 'Nunito-Regular',
-    lineHeight: 24,
+    fontSize: 18,
+    fontFamily: theme.fonts.primary,
+    color: theme.colors.textDark,
+    lineHeight: 26,
     textAlign: 'center',
+    marginBottom: 12,
   },
   tapIndicator: {
-    marginTop: 10,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    backgroundColor: '#FF9F1C',
-    borderRadius: 15,
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(255, 159, 28, 0.1)',
+    borderRadius: 12,
+    alignSelf: 'center',
   },
   tapText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontSize: 12,
+    color: theme.colors.primary,
+    fontFamily: theme.fonts.primary,
+    textAlign: 'center',
+    opacity: 0.8,
   },
-  dialogueOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'flex-end',
-  },
-  mainMascotContainer: {
-    height: 297,
-    bottom: 0,
-    alignItems: 'center',
-  },
-  mainMascotImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'contain',
-  },
-  dialogueBubble: {
-    marginHorizontal: 20,
-    marginBottom: 350,
-    backgroundColor: '#FFF',
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
-  },
-  dialogueTriangle: {
+  peekingContainer: {
     position: 'absolute',
-    bottom: -10,
-    left: '50%',
-    marginLeft: -10,
-    width: 0,
-    height: 0,
-    borderTopWidth: 10,
-    borderLeftWidth: 10,
-    borderRightWidth: 10,
-    borderBottomWidth: 0,
-    borderTopColor: '#FFF',
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
+    bottom: -58,
+    left: -58,
+    zIndex: 50,
   },
-  dialogueText: {
-    fontSize: 16,
-    color: '#333',
-    fontFamily: 'Nunito-Regular',
-    lineHeight: 24,
+  peekingMascot: {
+    width: 180,
+    height: 180,
+    overflow: 'hidden',
+    transform: [{ rotate: '45deg' }],
   },
-  cursor: {
-    color: '#FF9F1C',
-    fontWeight: 'bold',
+  peekingImage: {
+    width: 180,
+    height: 180,
+    marginTop: 0,
   },
 });
 
-export default Mascot;
+export default EnhancedMascotDisplay;

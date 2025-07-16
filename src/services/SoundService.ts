@@ -1,5 +1,6 @@
 import Sound from 'react-native-sound';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { NotificationService } from './NotificationService';
 
 Sound.setCategory('Playback');
 
@@ -30,35 +31,54 @@ class SoundServiceClass {
   private currentMusic: Sound | null = null;
 
   async initialize() {
-    // Load sound settings
-    await this.loadSettings();
+    try {
+      // Load sound settings
+      await this.loadSettings();
 
-    // Pre-load all sound files from assets folder
-    const soundFiles = {
-      correct: require('../assets/sounds/correct.mp3'),
-      incorrect: require('../assets/sounds/incorrect.mp3'),
-      buttonClick: require('../assets/sounds/buttonpress.mp3'),
-      streak: require('../assets/sounds/streak.mp3'),
-      gamemusic: require('../assets/sounds/gamemusic.mp3'),
-      menumusic: require('../assets/sounds/menumusic.mp3'),
-    };
+      console.log('🔊 Initializing SoundService...');
 
-    Object.entries(soundFiles).forEach(([key, soundFile]) => {
-      this.sounds[key as keyof SoundEffects] = new Sound(soundFile, undefined, (error) => {
-        if (error) {
-          console.log(`Sound file ${key} not found - app will work without this sound`);
-          // Set to null so the app continues to work
+      // Pre-load all sound files from assets folder
+      const soundFiles = {
+        correct: 'correct.mp3',
+        incorrect: 'incorrect.mp3',
+        buttonClick: 'buttonpress.mp3',
+        streak: 'streak.mp3',
+        gamemusic: 'gamemusic.mp3',
+        menumusic: 'menumusic.mp3',
+      };
+
+      // Load sounds with better error handling
+      for (const [key, filename] of Object.entries(soundFiles)) {
+        try {
+          console.log(`🔊 Loading sound: ${key} (${filename})`);
+          
+          this.sounds[key as keyof SoundEffects] = new Sound(filename, Sound.MAIN_BUNDLE, (error) => {
+            if (error) {
+              console.log(`⚠️ Sound file ${key} not found - app will work without this sound`);
+              console.log(`Error details:`, error);
+              // Set to null so the app continues to work
+              this.sounds[key as keyof SoundEffects] = null;
+            } else {
+              console.log(`✅ Successfully loaded ${key}`);
+              // Set properties for background music
+              if ((key === 'gamemusic' || key === 'menumusic') && this.sounds[key as keyof SoundEffects]) {
+                this.sounds[key as keyof SoundEffects]?.setNumberOfLoops(-1); // Loop infinitely
+                this.sounds[key as keyof SoundEffects]?.setVolume(this.musicVolume);
+              }
+            }
+          });
+        } catch (error) {
+          console.log(`❌ Failed to initialize sound ${key}:`, error);
           this.sounds[key as keyof SoundEffects] = null;
-        } else {
-          console.log(`Successfully loaded ${key}`);
-          // Set properties for background music
-          if ((key === 'gamemusic' || key === 'menumusic') && this.sounds[key as keyof SoundEffects]) {
-            this.sounds[key as keyof SoundEffects]?.setNumberOfLoops(-1); // Loop infinitely
-            this.sounds[key as keyof SoundEffects]?.setVolume(this.musicVolume);
-          }
         }
-      });
-    });
+      }
+
+      console.log('✅ SoundService initialization completed');
+    } catch (error) {
+      console.log('❌ SoundService initialization failed, continuing without sound:', error);
+      // Don't throw the error, just log it and continue
+      // This prevents the app from crashing if sound initialization fails
+    }
   }
 
   private async loadSettings() {
@@ -113,6 +133,7 @@ class SoundServiceClass {
   // Specific sound methods for easier use
   playCorrect() {
     this.playSound('correct');
+    // You can add a small delay and trigger achievement notifications here if needed
   }
 
   playIncorrect() {
@@ -128,6 +149,7 @@ class SoundServiceClass {
       this.sounds.streak.setVolume(this.effectsVolume);
       this.sounds.streak.play();
     }
+    // This method is called when streaks are achieved
   }
 
   playTimerWarning() {

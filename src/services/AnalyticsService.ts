@@ -6,6 +6,8 @@ interface UserProperties {
   totalScore?: number;
   flowStreak?: number;
   questionsAnswered?: number;
+  platform?: string;
+  app_version?: string;
 }
 
 interface EventParams {
@@ -14,27 +16,52 @@ interface EventParams {
 
 class AnalyticsServiceClass {
   private isInitialized = false;
+  private firebaseAvailable = false;
 
   async initialize() {
     try {
-      // Enable analytics collection
-      await analytics().setAnalyticsCollectionEnabled(true);
+      console.log('📊 Initializing AnalyticsService...');
       
-      // Set default user properties
-      await this.setUserProperties({
-        platform: Platform.OS,
-        app_version: '1.0.0',
-      });
+      // Check if Firebase is available
+      try {
+        // Test if Firebase is properly initialized
+        await analytics().setAnalyticsCollectionEnabled(true);
+        this.firebaseAvailable = true;
+        console.log('✅ Firebase Analytics is available');
+      } catch (firebaseError) {
+        console.log('⚠️ Firebase Analytics not available:', firebaseError);
+        this.firebaseAvailable = false;
+        // Don't throw error, just continue without analytics
+      }
+
+      if (this.firebaseAvailable) {
+        // Set default user properties
+        await this.setUserProperties({
+          platform: Platform.OS,
+          app_version: '1.0.0',
+        });
+      }
 
       this.isInitialized = true;
-      console.log('Analytics initialized successfully');
+      console.log('✅ AnalyticsService initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize analytics:', error);
+      console.log('❌ AnalyticsService initialization failed, continuing without analytics:', error);
+      // Don't throw error, just continue without analytics
+      this.isInitialized = true; // Mark as initialized so app doesn't crash
     }
+  }
+
+  isEnabled(): boolean {
+    return this.isInitialized && this.firebaseAvailable;
+  }
+
+  isFirebaseAvailable(): boolean {
+    return this.firebaseAvailable;
   }
 
   // User Events
   async logLogin(method: string) {
+    if (!this.firebaseAvailable) return;
     try {
       await analytics().logLogin({ method });
     } catch (error) {
@@ -43,6 +70,7 @@ class AnalyticsServiceClass {
   }
 
   async logSignUp(method: string) {
+    if (!this.firebaseAvailable) return;
     try {
       await analytics().logSignUp({ method });
     } catch (error) {
@@ -52,6 +80,7 @@ class AnalyticsServiceClass {
 
   // Quiz Events
   async logQuizStart(category: string, difficulty: string) {
+    if (!this.firebaseAvailable) return;
     try {
       await analytics().logEvent('quiz_start', {
         category,
@@ -232,11 +261,10 @@ class AnalyticsServiceClass {
   }) {
     try {
       await this.setUserProperties({
-        total_score: stats.totalScore,
-        questions_answered: stats.questionsAnswered,
-        accuracy_percentage: Math.round(stats.accuracy),
-        flow_streak: stats.flowStreak,
-        best_streak: stats.bestStreak,
+        totalScore: stats.totalScore,
+        questionsAnswered: stats.questionsAnswered,
+        // Note: accuracy and bestStreak are not in UserProperties interface
+        // so we'll log them as custom events instead
       });
     } catch (error) {
       console.error('Failed to update user stats:', error);
