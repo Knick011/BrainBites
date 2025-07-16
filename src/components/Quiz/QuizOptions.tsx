@@ -1,5 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import Icon from 'react-native-vector-icons/Ionicons';
+import theme from '../../styles/theme';
 
 interface QuizOptionsProps {
   options: string[];
@@ -9,27 +11,35 @@ interface QuizOptionsProps {
   onSelectAnswer: (answer: string) => void;
 }
 
-const QuizOptions: React.FC<QuizOptionsProps> = ({
+export const QuizOptions: React.FC<QuizOptionsProps> = ({
   options,
   selectedAnswer,
   correctAnswer,
   showResult,
   onSelectAnswer,
 }) => {
-  const getOptionStyle = (option: string) => {
-    if (!showResult) {
-      return selectedAnswer === option ? styles.selectedOption : styles.option;
-    }
+  const getOptionLabel = (index: number): string => {
+    return ['A', 'B', 'C', 'D'][index];
+  };
 
-    if (option === correctAnswer) {
-      return styles.correctOption;
+  const getOptionStyle = (option: string, index: number) => {
+    const baseStyle = [styles.optionButton];
+    
+    if (selectedAnswer === option) {
+      if (showResult) {
+        if (option === correctAnswer) {
+          baseStyle.push(styles.correctOption);
+        } else {
+          baseStyle.push(styles.incorrectOption);
+        }
+      } else {
+        baseStyle.push(styles.selectedOption);
+      }
+    } else if (showResult && option === correctAnswer) {
+      baseStyle.push(styles.correctOption);
     }
-
-    if (selectedAnswer === option && option !== correctAnswer) {
-      return styles.incorrectOption;
-    }
-
-    return styles.option;
+    
+    return baseStyle;
   };
 
   return (
@@ -37,11 +47,18 @@ const QuizOptions: React.FC<QuizOptionsProps> = ({
       {options.map((option, index) => (
         <TouchableOpacity
           key={index}
-          style={[styles.optionButton, getOptionStyle(option)]}
+          style={getOptionStyle(option, index)}
           onPress={() => onSelectAnswer(option)}
           disabled={showResult}
+          activeOpacity={0.7}
         >
-          <Text style={styles.optionText}>{option}</Text>
+          <View style={styles.optionContent}>
+            <View style={styles.optionLabel}>
+              <Text style={styles.optionLabelText}>{getOptionLabel(index)}</Text>
+            </View>
+            <Text style={styles.optionText}>{option}</Text>
+            <Icon name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+          </View>
         </TouchableOpacity>
       ))}
     </View>
@@ -50,44 +67,54 @@ const QuizOptions: React.FC<QuizOptionsProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 20,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    flex: 1,
   },
   optionButton: {
-    width: '48%',
-    marginVertical: 8,
-    paddingVertical: 15,
-    paddingHorizontal: 15,
-    borderRadius: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 60,
-  },
-  option: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: theme.colors.optionDefault,
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: theme.spacing.md,
+    padding: theme.spacing.lg,
+    ...theme.shadows.sm,
   },
   selectedOption: {
-    backgroundColor: '#FF9F1C',
+    backgroundColor: theme.colors.optionSelected,
+    borderWidth: 2,
+    borderColor: theme.colors.info,
   },
   correctOption: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: theme.colors.optionCorrect,
+    borderWidth: 2,
+    borderColor: theme.colors.success,
   },
   incorrectOption: {
-    backgroundColor: '#F44336',
+    backgroundColor: theme.colors.optionIncorrect,
+    borderWidth: 2,
+    borderColor: theme.colors.error,
+  },
+  optionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  optionLabel: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.colors.gray[300],
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: theme.spacing.md,
+  },
+  optionLabelText: {
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.fonts.primaryBold,
+    color: theme.colors.textSecondary,
   },
   optionText: {
-    fontSize: 16,
-    color: '#333',
-    textAlign: 'center',
-    fontFamily: 'Nunito-Bold',
-    lineHeight: 20,
+    flex: 1,
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.fonts.primary,
+    color: theme.colors.textPrimary,
+    marginRight: theme.spacing.sm,
   },
 });
 

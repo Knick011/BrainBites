@@ -1,5 +1,15 @@
-import analytics from '@react-native-firebase/analytics';
 import { Platform } from 'react-native';
+
+// Import Firebase Analytics with error handling
+let analytics: any = null;
+let firebaseApp: any = null;
+
+try {
+  analytics = require('@react-native-firebase/analytics').default;
+  firebaseApp = require('@react-native-firebase/app').default;
+} catch (error) {
+  console.log('Firebase modules not available:', error);
+}
 
 interface UserProperties {
   username?: string;
@@ -22,24 +32,36 @@ class AnalyticsServiceClass {
     try {
       console.log('📊 Initializing AnalyticsService...');
       
-      // Check if Firebase is available
+      // Check if Firebase modules are available
+      if (!analytics || !firebaseApp) {
+        console.log('⚠️ Firebase Analytics not available - modules not found');
+        this.firebaseAvailable = false;
+        this.isInitialized = true;
+        console.log('✅ AnalyticsService initialized successfully (without Firebase)');
+        return;
+      }
+
+      // Check if Firebase app is properly initialized
       try {
-        // Test if Firebase is properly initialized
-        await analytics().setAnalyticsCollectionEnabled(true);
-        this.firebaseAvailable = true;
-        console.log('✅ Firebase Analytics is available');
+        const apps = firebaseApp.apps;
+        if (apps.length === 0) {
+          console.log('⚠️ Firebase Analytics not available:', 'No Firebase App [DEFAULT] has been created - call firebase.initializeApp()');
+          this.firebaseAvailable = false;
+        } else {
+          // Test Firebase Analytics
+          await analytics().setAnalyticsCollectionEnabled(true);
+          this.firebaseAvailable = true;
+          console.log('✅ Firebase Analytics is available');
+          
+          // Set default user properties
+          await this.setUserProperties({
+            platform: Platform.OS,
+            app_version: '1.0.0',
+          });
+        }
       } catch (firebaseError) {
         console.log('⚠️ Firebase Analytics not available:', firebaseError);
         this.firebaseAvailable = false;
-        // Don't throw error, just continue without analytics
-      }
-
-      if (this.firebaseAvailable) {
-        // Set default user properties
-        await this.setUserProperties({
-          platform: Platform.OS,
-          app_version: '1.0.0',
-        });
       }
 
       this.isInitialized = true;
@@ -48,6 +70,7 @@ class AnalyticsServiceClass {
       console.log('❌ AnalyticsService initialization failed, continuing without analytics:', error);
       // Don't throw error, just continue without analytics
       this.isInitialized = true; // Mark as initialized so app doesn't crash
+      this.firebaseAvailable = false;
     }
   }
 
@@ -61,7 +84,7 @@ class AnalyticsServiceClass {
 
   // User Events
   async logLogin(method: string) {
-    if (!this.firebaseAvailable) return;
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logLogin({ method });
     } catch (error) {
@@ -70,7 +93,7 @@ class AnalyticsServiceClass {
   }
 
   async logSignUp(method: string) {
-    if (!this.firebaseAvailable) return;
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logSignUp({ method });
     } catch (error) {
@@ -80,7 +103,7 @@ class AnalyticsServiceClass {
 
   // Quiz Events
   async logQuizStart(category: string, difficulty: string) {
-    if (!this.firebaseAvailable) return;
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logEvent('quiz_start', {
         category,
@@ -101,6 +124,7 @@ class AnalyticsServiceClass {
     duration: number;
     streak: number;
   }) {
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logEvent('quiz_complete', params);
     } catch (error) {
@@ -109,6 +133,7 @@ class AnalyticsServiceClass {
   }
 
   async logQuestionAnswered(correct: boolean, category: string, difficulty: string, responseTime: number) {
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logEvent('question_answered', {
         correct,
@@ -123,6 +148,7 @@ class AnalyticsServiceClass {
 
   // Streak Events
   async logStreakAchieved(streakLength: number) {
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logEvent('streak_achieved', {
         streak_length: streakLength,
@@ -134,6 +160,7 @@ class AnalyticsServiceClass {
   }
 
   async logStreakBroken(streakLength: number) {
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logEvent('streak_broken', {
         streak_length: streakLength,
@@ -146,6 +173,7 @@ class AnalyticsServiceClass {
 
   // Timer Events
   async logTimerExpired(negativeTime: number) {
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logEvent('timer_expired', {
         negative_time_minutes: Math.floor(negativeTime / 60000),
@@ -157,6 +185,7 @@ class AnalyticsServiceClass {
   }
 
   async logTimeRewardEarned(minutes: number, source: string) {
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logEvent('time_reward_earned', {
         minutes,
@@ -170,6 +199,7 @@ class AnalyticsServiceClass {
 
   // Daily Goals Events
   async logDailyGoalCompleted(goalType: string, reward: number) {
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logEvent('daily_goal_completed', {
         goal_type: goalType,
@@ -182,6 +212,7 @@ class AnalyticsServiceClass {
   }
 
   async logAllDailyGoalsCompleted() {
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logEvent('all_daily_goals_completed', {
         timestamp: Date.now(),
@@ -193,6 +224,7 @@ class AnalyticsServiceClass {
 
   // Flow Events
   async logDailyFlowMaintained(flowStreak: number) {
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logEvent('daily_flow_maintained', {
         flow_streak: flowStreak,
@@ -204,6 +236,7 @@ class AnalyticsServiceClass {
   }
 
   async logFlowBroken(previousStreak: number) {
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logEvent('flow_broken', {
         previous_streak: previousStreak,
@@ -216,6 +249,7 @@ class AnalyticsServiceClass {
 
   // Leaderboard Events
   async logLeaderboardViewed(rank: number) {
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logEvent('leaderboard_viewed', {
         user_rank: rank,
@@ -228,6 +262,7 @@ class AnalyticsServiceClass {
 
   // Mascot Interaction Events
   async logMascotInteraction(interaction: string, context: string) {
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logEvent('mascot_interaction', {
         interaction_type: interaction,
@@ -241,6 +276,7 @@ class AnalyticsServiceClass {
 
   // User Properties
   async setUserProperties(properties: UserProperties) {
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       for (const [key, value] of Object.entries(properties)) {
         if (value !== undefined) {
@@ -259,12 +295,12 @@ class AnalyticsServiceClass {
     flowStreak: number;
     bestStreak: number;
   }) {
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await this.setUserProperties({
         totalScore: stats.totalScore,
         questionsAnswered: stats.questionsAnswered,
-        // Note: accuracy and bestStreak are not in UserProperties interface
-        // so we'll log them as custom events instead
+        flowStreak: stats.flowStreak,
       });
     } catch (error) {
       console.error('Failed to update user stats:', error);
@@ -273,6 +309,7 @@ class AnalyticsServiceClass {
 
   // Screen Tracking
   async logScreenView(screenName: string, screenClass?: string) {
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logScreenView({
         screen_name: screenName,
@@ -285,6 +322,7 @@ class AnalyticsServiceClass {
 
   // Revenue Events (for AdMob)
   async logAdImpression(adType: string, adUnit: string) {
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logEvent('ad_impression', {
         ad_type: adType,
@@ -297,6 +335,7 @@ class AnalyticsServiceClass {
   }
 
   async logAdClick(adType: string, adUnit: string) {
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logEvent('ad_click', {
         ad_type: adType,
@@ -310,6 +349,7 @@ class AnalyticsServiceClass {
 
   // App Lifecycle Events
   async logAppOpen() {
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logAppOpen();
     } catch (error) {
@@ -318,6 +358,7 @@ class AnalyticsServiceClass {
   }
 
   async logSessionDuration(duration: number) {
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logEvent('session_duration', {
         duration_minutes: Math.floor(duration / 60000),
@@ -330,6 +371,7 @@ class AnalyticsServiceClass {
 
   // Custom Events
   async logCustomEvent(eventName: string, params?: EventParams) {
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logEvent(eventName, params);
     } catch (error) {
@@ -339,14 +381,15 @@ class AnalyticsServiceClass {
 
   // Error Tracking
   async logError(error: string, fatal: boolean = false) {
+    if (!this.firebaseAvailable || !analytics) return;
     try {
       await analytics().logEvent('app_error', {
         error_message: error,
         fatal,
         timestamp: Date.now(),
       });
-    } catch (err) {
-      console.error('Failed to log error:', err);
+    } catch (error) {
+      console.error('Failed to log error:', error);
     }
   }
 }

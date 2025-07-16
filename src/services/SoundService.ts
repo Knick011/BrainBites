@@ -1,7 +1,7 @@
 import Sound from 'react-native-sound';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NotificationService } from './NotificationService';
 
+// Enable playback in background/silent mode
 Sound.setCategory('Playback');
 
 interface SoundEffects {
@@ -32,41 +32,48 @@ class SoundServiceClass {
 
   async initialize() {
     try {
-      // Load sound settings
+      console.log('🔊 Initializing SoundService...');
+      
+      // Load sound settings first
       await this.loadSettings();
 
-      console.log('🔊 Initializing SoundService...');
-
-      // Pre-load all sound files from assets folder
+      // Sound file mapping - using correct paths for React Native Sound
       const soundFiles = {
         correct: 'correct.mp3',
-        incorrect: 'incorrect.mp3',
+        incorrect: 'incorrect.mp3', 
         buttonClick: 'buttonpress.mp3',
         streak: 'streak.mp3',
         gamemusic: 'gamemusic.mp3',
         menumusic: 'menumusic.mp3',
       };
 
-      // Load sounds with better error handling
+      // Load each sound with proper error handling
       for (const [key, filename] of Object.entries(soundFiles)) {
         try {
           console.log(`🔊 Loading sound: ${key} (${filename})`);
           
-          this.sounds[key as keyof SoundEffects] = new Sound(filename, Sound.MAIN_BUNDLE, (error) => {
-            if (error) {
-              console.log(`⚠️ Sound file ${key} not found - app will work without this sound`);
-              console.log(`Error details:`, error);
-              // Set to null so the app continues to work
-              this.sounds[key as keyof SoundEffects] = null;
-            } else {
-              console.log(`✅ Successfully loaded ${key}`);
-              // Set properties for background music
-              if ((key === 'gamemusic' || key === 'menumusic') && this.sounds[key as keyof SoundEffects]) {
-                this.sounds[key as keyof SoundEffects]?.setNumberOfLoops(-1); // Loop infinitely
-                this.sounds[key as keyof SoundEffects]?.setVolume(this.musicVolume);
+          // Create new Sound instance with callback
+          this.sounds[key as keyof SoundEffects] = new Sound(
+            filename, 
+            Sound.MAIN_BUNDLE, // Load from main bundle (android/app/src/main/res/raw/)
+            (error) => {
+              if (error) {
+                console.log(`❌ Failed to load sound ${key}:`, error.message);
+                this.sounds[key as keyof SoundEffects] = null;
+              } else {
+                console.log(`✅ Successfully loaded ${key}`);
+                
+                // Configure music files for looping
+                if (key === 'gamemusic' || key === 'menumusic') {
+                  const sound = this.sounds[key as keyof SoundEffects];
+                  if (sound) {
+                    sound.setNumberOfLoops(-1); // Loop infinitely
+                    sound.setVolume(this.musicVolume);
+                  }
+                }
               }
             }
-          });
+          );
         } catch (error) {
           console.log(`❌ Failed to initialize sound ${key}:`, error);
           this.sounds[key as keyof SoundEffects] = null;
@@ -118,7 +125,11 @@ class SoundServiceClass {
 
     const sound = this.sounds[soundName];
     if (sound) {
-      sound.setVolume((soundName === 'gamemusic' || soundName === 'menumusic') ? this.musicVolume : this.effectsVolume);
+      const volume = (soundName === 'gamemusic' || soundName === 'menumusic') 
+        ? this.musicVolume 
+        : this.effectsVolume;
+      
+      sound.setVolume(volume);
       sound.play((success) => {
         if (!success) {
           console.log(`Failed to play ${soundName} sound`);
@@ -130,10 +141,9 @@ class SoundServiceClass {
     }
   }
 
-  // Specific sound methods for easier use
+  // Specific sound methods
   playCorrect() {
     this.playSound('correct');
-    // You can add a small delay and trigger achievement notifications here if needed
   }
 
   playIncorrect() {
@@ -145,18 +155,12 @@ class SoundServiceClass {
   }
 
   playStreak() {
-    if (this.soundEnabled && this.sounds.streak) {
-      this.sounds.streak.setVolume(this.effectsVolume);
-      this.sounds.streak.play();
-    }
-    // This method is called when streaks are achieved
+    this.playSound('streak');
   }
 
   playTimerWarning() {
-    if (this.soundEnabled && this.sounds.buttonClick) {
-      this.sounds.buttonClick.setVolume(this.effectsVolume);
-      this.sounds.buttonClick.play();
-    }
+    // Use button click sound for timer warning
+    this.playButtonClick();
   }
 
   playGameMusic() {
@@ -182,14 +186,23 @@ class SoundServiceClass {
       this.currentMusic.stop();
       this.currentMusic = null;
     }
+    // Also stop individual music tracks
+    this.sounds.gamemusic?.stop();
+    this.sounds.menumusic?.stop();
   }
 
   stopGameMusic() {
     this.sounds.gamemusic?.stop();
+    if (this.currentMusic === this.sounds.gamemusic) {
+      this.currentMusic = null;
+    }
   }
 
   stopMenuMusic() {
     this.sounds.menumusic?.stop();
+    if (this.currentMusic === this.sounds.menumusic) {
+      this.currentMusic = null;
+    }
   }
 
   pauseGameMusic() {
@@ -201,24 +214,22 @@ class SoundServiceClass {
   }
 
   resumeGameMusic() {
-    if (this.soundEnabled) {
-      this.sounds.gamemusic?.play();
+    if (this.soundEnabled && this.sounds.gamemusic) {
+      this.sounds.gamemusic.play();
     }
   }
 
   resumeMenuMusic() {
-    if (this.soundEnabled) {
-      this.sounds.menumusic?.play();
+    if (this.soundEnabled && this.sounds.menumusic) {
+      this.sounds.menumusic.play();
     }
   }
 
-  toggleMute() {
-    this.soundEnabled = !this.soundEnabled;
-    if (!this.soundEnabled) {
-      this.stopGameMusic();
-      this.stopMenuMusic();
-    } else {
-      this.playMenuMusic();
+  // Settings methods
+  setSoundEnabled(enabled: boolean) {
+    this.soundEnabled = enabled;
+    if (!enabled) {
+      this.stopAllMusic();
     }
     this.saveSettings();
   }
@@ -231,10 +242,21 @@ class SoundServiceClass {
   }
 
   setEffectsVolume(volume: number) {
-    this.effectsVolume = volume;
+    this.effectsVolume = Math.max(0, Math.min(1, volume));
     this.saveSettings();
   }
 
+  toggleMute() {
+    this.soundEnabled = !this.soundEnabled;
+    if (!this.soundEnabled) {
+      this.stopAllMusic();
+    } else {
+      this.playMenuMusic();
+    }
+    this.saveSettings();
+  }
+
+  // Getters
   isSoundEnabled() {
     return this.soundEnabled;
   }
@@ -247,21 +269,6 @@ class SoundServiceClass {
     return this.effectsVolume;
   }
 
-  setSoundEnabled(enabled: boolean) {
-    this.soundEnabled = enabled;
-    if (!enabled) {
-      this.stopAllMusic();
-    }
-    this.saveSettings();
-  }
-
-  stopAll() {
-    Object.values(this.sounds).forEach((sound) => {
-      sound?.stop();
-      sound?.release();
-    });
-  }
-
   getMuteStatus() {
     return this.isMuted;
   }
@@ -271,6 +278,15 @@ class SoundServiceClass {
       music: this.musicVolume,
       effects: this.effectsVolume,
     };
+  }
+
+  // Cleanup
+  stopAll() {
+    Object.values(this.sounds).forEach((sound) => {
+      sound?.stop();
+      sound?.release();
+    });
+    this.currentMusic = null;
   }
 }
 

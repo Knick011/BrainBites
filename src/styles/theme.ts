@@ -1,62 +1,89 @@
-// Updated theme based on the specifications
-import { Platform } from 'react-native';
-
-const theme = {
+// src/styles/theme.ts
+export default {
   colors: {
-    // Primary colors from the specifications
-    primary: '#FF9F1C',       // Primary orange
-    secondary: '#FFB347',     // Secondary orange  
-    accent: '#5D9CEC',        // Accent blue
-    success: '#4CD964',       // Success green (correct answers)
-    warning: '#FFCC00',       // Warning yellow
-    error: '#FF3B30',         // Error red (incorrect answers)
+    primary: '#FF9F1C',
+    primaryDark: '#E8890A',
+    primaryLight: '#FFB84D',
+    secondary: '#4A90E2',
+    accent: '#50C878',
+    
+    // Quiz Colors (matching your image)
+    quizPrimary: '#FF9F1C',
+    quizSecondary: '#FFB84D', 
+    quizTertiary: '#FFD07B',
     
     // Background colors
-    background: '#FFF8E7',    // Light cream background
-    card: '#FFFFFF',          // White cards
+    background: '#FAFAFA',
+    backgroundLight: '#FFFFFF',
+    backgroundDark: '#F5F5F5',
     
     // Text colors
-    textDark: '#333333',      // Main text
-    textLight: '#FFFFFF',     // White text
-    textMuted: '#777777',     // Secondary text
+    textPrimary: '#333333',
+    textSecondary: '#666666',
+    textLight: '#999999',
+    textDark: '#1A1A1A',
+    textWhite: '#FFFFFF',
     
-    // Light versions for backgrounds
-    successLight: 'rgba(76, 217, 100, 0.15)',
-    errorLight: 'rgba(255, 59, 48, 0.15)',
-    warningLight: 'rgba(255, 204, 0, 0.15)',
-    primaryLight: 'rgba(255, 159, 28, 0.15)',
+    // Status colors
+    success: '#4CAF50',
+    successLight: '#E8F5E8',
+    error: '#F44336',
+    errorLight: '#FFEBEE',
+    warning: '#FF9800',
+    warningLight: '#FFF3E0',
+    info: '#2196F3',
+    infoLight: '#E3F2FD',
     
-    // Overlay
-    overlay: 'rgba(0, 0, 0, 0.7)',
+    // Option colors for quiz
+    optionDefault: '#F5F5F5',
+    optionSelected: '#E3F2FD',
+    optionCorrect: '#E8F5E8',
+    optionIncorrect: '#FFEBEE',
     
-    // Additional colors for UI elements
+    // Neutral colors
     white: '#FFFFFF',
     black: '#000000',
     gray: {
       50: '#FAFAFA',
       100: '#F5F5F5',
-      200: '#E5E5E5',
-      300: '#D4D4D4',
-      400: '#A3A3A3',
-      500: '#737373',
-      600: '#525252',
-      700: '#404040',
-      800: '#262626',
-      900: '#171717',
-    }
+      200: '#EEEEEE',
+      300: '#E0E0E0',
+      400: '#BDBDBD',
+      500: '#9E9E9E',
+      600: '#757575',
+      700: '#616161',
+      800: '#424242',
+      900: '#212121',
+    },
+    
+    // Card colors
+    card: '#FFFFFF',
+    cardBorder: '#E0E0E0',
+    cardShadow: 'rgba(0, 0, 0, 0.1)',
+    
+    // Overlay colors
+    overlay: 'rgba(0, 0, 0, 0.5)',
+    overlayLight: 'rgba(0, 0, 0, 0.3)',
+  },
+  
+  fonts: {
+    primary: 'Nunito-Regular',
+    primaryBold: 'Nunito-Bold',
+    secondary: 'Quicksand-Regular',
+    secondaryBold: 'Quicksand-Bold',
   },
   
   typography: {
     fontFamily: {
-      regular: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
-      medium: Platform.OS === 'ios' ? 'Avenir-Medium' : 'Roboto-Medium',
-      bold: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'Roboto-Bold',
-      black: Platform.OS === 'ios' ? 'Avenir-Black' : 'Roboto-Black',
+      regular: 'Nunito-Regular',
+      bold: 'Nunito-Bold',
+      secondary: 'Quicksand-Regular',
+      secondaryBold: 'Quicksand-Bold',
     },
     fontSize: {
       xs: 12,
       sm: 14,
-      md: 16,
+      base: 16,
       lg: 18,
       xl: 20,
       '2xl': 24,
@@ -65,9 +92,17 @@ const theme = {
       '5xl': 48,
     },
     lineHeight: {
-      tight: 1.2,
+      tight: 1.25,
+      snug: 1.375,
       normal: 1.5,
-      relaxed: 1.75,
+      relaxed: 1.625,
+      loose: 2,
+    },
+    fontWeight: {
+      normal: '400',
+      medium: '500',
+      semibold: '600',
+      bold: '700',
     },
   },
   
@@ -83,80 +118,65 @@ const theme = {
   
   borderRadius: {
     none: 0,
-    sm: 8,
-    md: 16,
-    lg: 24,
-    xl: 32,
+    sm: 4,
+    base: 8,
+    md: 12,
+    lg: 16,
+    xl: 20,
+    '2xl': 24,
     full: 9999,
   },
   
   shadows: {
-    none: {
-      shadowColor: 'transparent',
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0,
-      shadowRadius: 0,
-      elevation: 0,
-    },
     sm: {
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.18,
-      shadowRadius: 2,
-      elevation: 2,
-    },
-    md: {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.22,
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+      shadowOpacity: 0.1,
       shadowRadius: 4,
       elevation: 3,
     },
-    lg: {
+    md: {
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.25,
+      shadowOffset: {
+        width: 0,
+        height: 4,
+      },
+      shadowOpacity: 0.15,
       shadowRadius: 8,
       elevation: 5,
     },
-    xl: {
+    lg: {
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.3,
-      shadowRadius: 12,
+      shadowOffset: {
+        width: 0,
+        height: 8,
+      },
+      shadowOpacity: 0.2,
+      shadowRadius: 16,
       elevation: 8,
     },
-    // Special orange shadow for buttons
-    primary: {
-      shadowColor: 'rgba(255, 159, 28, 0.4)',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 1,
-      shadowRadius: 8,
-      elevation: 4,
+  },
+  
+  animations: {
+    duration: {
+      fast: 200,
+      normal: 300,
+      slow: 500,
+    },
+    easing: {
+      easeInOut: 'ease-in-out',
+      easeOut: 'ease-out',
+      easeIn: 'ease-in',
     },
   },
   
-  animation: {
-    fast: 200,
-    normal: 300,
-    slow: 500,
-    verySlow: 1000,
-  },
-  
-  zIndex: {
-    hide: -1,
-    base: 0,
-    dropdown: 10,
-    sticky: 20,
-    fixed: 30,
-    modalBackdrop: 40,
-    mascot: 50,
-    modal: 60,
-    popover: 70,
-    tooltip: 80,
-    notification: 90,
-    maximum: 99,
+  layout: {
+    headerHeight: 80,
+    tabBarHeight: 60,
+    borderWidth: 1,
+    borderWidthThick: 2,
   },
 };
-
-export default theme;
