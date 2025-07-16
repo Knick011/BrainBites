@@ -1,3 +1,4 @@
+// src/screens/LeaderboardScreen.js
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -11,9 +12,9 @@ import {
   Platform
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useNavigation } from '@react-navigation/native';
-import { useUserStore } from '../store/useUserStore';
-import { SoundService } from '../services/SoundService';
+import theme from '../styles/theme';
+import SoundService from '../services/SoundService';
+import EnhancedScoreService from '../services/EnhancedScoreService';
 
 // Funny capybara-themed player names
 const FAKE_NAMES = [
@@ -63,7 +64,7 @@ const generateTop10DailyScores = () => {
 };
 
 // Calculate user's actual rank based on score
-const calculateUserRank = (userScore: number) => {
+const calculateUserRank = (userScore) => {
   // Rough calculation: every 100 points difference = ~3 ranks
   // This creates a realistic distribution
   const scoreDifference = TOP_PLAYER_DAILY_SCORE - userScore;
@@ -76,7 +77,7 @@ const calculateUserRank = (userScore: number) => {
 };
 
 // Generate players around user's rank
-const generateAroundUserScores = (userScore: number, userRank: number) => {
+const generateAroundUserScores = (userScore, userRank) => {
   const scores = [];
   // Generate 2 players above and 2 below the user
   for (let i = -2; i <= 2; i++) {
@@ -98,23 +99,10 @@ const generateAroundUserScores = (userScore: number, userRank: number) => {
   return scores;
 };
 
-interface LeaderboardEntry {
-  id: string;
-  rank: number;
-  displayName: string;
-  score: number;
-  highestStreak: number;
-  isCurrentUser: boolean;
-  lastActive: string;
-  isSeparator?: boolean;
-}
-
-const LeaderboardScreen: React.FC = () => {
-  const navigation = useNavigation();
-  const { username, stats, flowStreak } = useUserStore();
-  const [activeTab, setActiveTab] = useState<'global' | 'friends'>('global');
-  const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>([]);
-  const [userRank, setUserRank] = useState<number | null>(null);
+const LeaderboardScreen = ({ navigation }) => {
+  const [activeTab, setActiveTab] = useState('global'); // 'global', 'friends'
+  const [leaderboardData, setLeaderboardData] = useState([]);
+  const [userRank, setUserRank] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentUserDailyScore, setCurrentUserDailyScore] = useState(0);
   
@@ -162,12 +150,13 @@ const LeaderboardScreen: React.FC = () => {
   }, [activeTab, currentUserDailyScore]);
   
   const loadUserScore = async () => {
-    // Simulate loading user score from storage
-    setCurrentUserDailyScore(stats.totalScore || Math.floor(Math.random() * 5000) + 1000);
+    await EnhancedScoreService.loadSavedData();
+    const scoreInfo = EnhancedScoreService.getScoreInfo();
+    setCurrentUserDailyScore(scoreInfo.dailyScore);
   };
   
   const loadLeaderboardData = () => {
-    let fakeData: LeaderboardEntry[] = [];
+    let fakeData = [];
     let userPosition = 0;
     
     switch (activeTab) {
@@ -177,12 +166,12 @@ const LeaderboardScreen: React.FC = () => {
         setUserRank(userRank);
         if (currentUserDailyScore > top10[9].score) {
           const insertIndex = top10.findIndex(p => p.score < currentUserDailyScore);
-          const userData: LeaderboardEntry = {
+          const userData = {
             id: 'current_user',
             rank: insertIndex + 1,
-            displayName: username || 'CaBBybara',
+            displayName: 'CaBBybara',
             score: currentUserDailyScore,
-            highestStreak: flowStreak,
+            highestStreak: EnhancedScoreService.getScoreInfo().highestStreak,
             isCurrentUser: true,
             lastActive: 'Online now',
           };
@@ -195,15 +184,15 @@ const LeaderboardScreen: React.FC = () => {
         } else {
           fakeData = [...top10];
         }
-        fakeData.push({ id: 'separator', rank: 0, displayName: '', score: 0, highestStreak: 0, isCurrentUser: false, lastActive: '', isSeparator: true });
+        fakeData.push({ id: 'separator', isSeparator: true });
         const aroundUser = generateAroundUserScores(currentUserDailyScore, userRank);
         fakeData = fakeData.concat(aroundUser);
-        const userData: LeaderboardEntry = {
+        const userData = {
           id: 'current_user',
           rank: userRank,
-          displayName: username || 'CaBBybara',
+          displayName: 'CaBBybara',
           score: currentUserDailyScore,
-          highestStreak: flowStreak,
+          highestStreak: EnhancedScoreService.getScoreInfo().highestStreak,
           isCurrentUser: true,
           lastActive: 'Online now',
         };
@@ -220,7 +209,7 @@ const LeaderboardScreen: React.FC = () => {
           'BestBaraBuddy', 'StudyCapy', 'CoffeeBara', 'GymCapybara', 'RoommateBara',
           'WorkCapy', 'OldBaraFriend', 'NewCapyPal', 'CoolCapyCousin', 'SisterBara'
         ];
-        const friendScores: LeaderboardEntry[] = friendNames.map((name, i) => {
+        const friendScores = friendNames.map((name, i) => {
           const variance = (Math.random() - 0.5) * currentUserDailyScore * 0.4;
           return {
             id: `friend_${i}`,
@@ -235,9 +224,9 @@ const LeaderboardScreen: React.FC = () => {
         friendScores.push({
           id: 'current_user',
           rank: 0,
-          displayName: username || 'CaBBybara',
+          displayName: 'CaBBybara',
           score: currentUserDailyScore,
-          highestStreak: flowStreak,
+          highestStreak: EnhancedScoreService.getScoreInfo().highestStreak,
           isCurrentUser: true,
           lastActive: 'Online now',
         });
@@ -256,7 +245,7 @@ const LeaderboardScreen: React.FC = () => {
   
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    SoundService.playButtonClick();
+    SoundService.playButtonPress();
     
     // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -266,12 +255,12 @@ const LeaderboardScreen: React.FC = () => {
     setIsRefreshing(false);
   };
   
-  const handleTabChange = (tab: 'global' | 'friends') => {
-    SoundService.playButtonClick();
+  const handleTabChange = (tab) => {
+    SoundService.playButtonPress();
     setActiveTab(tab);
   };
   
-  const renderLeaderboardItem = (item: LeaderboardEntry, index: number) => {
+  const renderLeaderboardItem = (item, index) => {
     if (item.isSeparator) {
       return (
         <View key={item.id} style={styles.separator}>
@@ -344,7 +333,7 @@ const LeaderboardScreen: React.FC = () => {
         </View>
         
         {item.isCurrentUser && (
-          <Icon name="chevron-right" size={24} color="#FF9F1C" />
+          <Icon name="chevron-right" size={24} color={theme.colors.primary} />
         )}
       </Animated.View>
     );
@@ -406,16 +395,13 @@ const LeaderboardScreen: React.FC = () => {
         <View style={{ width: 40 }} />
       </View>
       
-      {/* Filler Space */}
-      <View style={styles.fillerSpace} />
-      
       {/* Tab Bar */}
       <View style={styles.tabBar}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'global' && styles.activeTab]}
           onPress={() => handleTabChange('global')}
         >
-          <Icon name="earth" size={20} color={activeTab === 'global' ? '#FF9F1C' : '#777'} />
+          <Icon name="earth" size={20} color={activeTab === 'global' ? theme.colors.primary : '#777'} />
           <Text style={[styles.tabText, activeTab === 'global' && styles.activeTabText]}>Global</Text>
         </TouchableOpacity>
         
@@ -423,7 +409,7 @@ const LeaderboardScreen: React.FC = () => {
           style={[styles.tab, activeTab === 'friends' && styles.activeTab]}
           onPress={() => handleTabChange('friends')}
         >
-          <Icon name="account-group" size={20} color={activeTab === 'friends' ? '#FF9F1C' : '#777'} />
+          <Icon name="account-group" size={20} color={activeTab === 'friends' ? theme.colors.primary : '#777'} />
           <Text style={[styles.tabText, activeTab === 'friends' && styles.activeTabText]}>Friends</Text>
         </TouchableOpacity>
       </View>
@@ -440,8 +426,8 @@ const LeaderboardScreen: React.FC = () => {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
-            colors={['#FF9F1C']}
-            tintColor="#FF9F1C"
+            colors={[theme.colors.primary]}
+            tintColor={theme.colors.primary}
           />
         }
       >
@@ -461,10 +447,7 @@ const LeaderboardScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFF8E7',
-  },
-  fillerSpace: {
-    height: 40,
+    backgroundColor: theme.colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -515,7 +498,7 @@ const styles = StyleSheet.create({
   },
   activeTab: {
     borderBottomWidth: 2,
-    borderBottomColor: '#FF9F1C',
+    borderBottomColor: theme.colors.primary,
   },
   tabText: {
     marginLeft: 6,
@@ -524,19 +507,15 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif',
   },
   activeTabText: {
-    color: '#FF9F1C',
+    color: theme.colors.primary,
     fontWeight: 'bold',
   },
   userCard: {
-    backgroundColor: '#FF9F1C',
+    backgroundColor: theme.colors.primary,
     margin: 16,
     borderRadius: 16,
     padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    ...theme.shadows.md,
   },
   userCardContent: {
     flexDirection: 'row',
@@ -586,16 +565,12 @@ const styles = StyleSheet.create({
     marginVertical: 4,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    ...theme.shadows.sm,
   },
   currentUserItem: {
     backgroundColor: '#FFF5E6',
     borderWidth: 2,
-    borderColor: '#FF9F1C',
+    borderColor: theme.colors.primary,
   },
   rankContainer: {
     width: 60,
@@ -622,7 +597,7 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
   },
   currentUserRank: {
-    color: '#FF9F1C',
+    color: theme.colors.primary,
   },
   playerInfo: {
     flex: 1,
@@ -636,7 +611,7 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif-medium',
   },
   currentUserName: {
-    color: '#FF9F1C',
+    color: theme.colors.primary,
     fontWeight: 'bold',
   },
   statsRow: {
@@ -674,7 +649,7 @@ const styles = StyleSheet.create({
   separatorTextContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF8E7',
+    backgroundColor: theme.colors.background,
     paddingHorizontal: 16,
     paddingVertical: 8,
     position: 'absolute',

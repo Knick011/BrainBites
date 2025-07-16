@@ -95,6 +95,9 @@ const DailyGoalsScreen: React.FC = () => {
         <View style={{ width: 44 }} />
       </View>
 
+      {/* Filler Space */}
+      <View style={styles.fillerSpace} />
+
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Today's Progress</Text>
@@ -126,6 +129,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFF8E7',
+  },
+  fillerSpace: {
+    height: 40,
   },
   header: {
     flexDirection: 'row',

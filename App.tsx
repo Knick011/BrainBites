@@ -26,7 +26,6 @@ import { AnalyticsService } from './src/services/AnalyticsService';
 import { QuestionService } from './src/services/QuestionService';
 
 // Components
-import PersistentTimer from './src/components/Timer/PersistentTimer';
 import Mascot from './src/components/Mascot/Mascot';
 
 // Stores
@@ -38,7 +37,7 @@ export type RootStackParamList = {
   Welcome: undefined;
   Home: undefined;
   Quiz: { category?: string; difficulty?: 'easy' | 'medium' | 'hard' };
-  Categories: undefined;
+  Categories: { difficulty?: 'easy' | 'medium' | 'hard' };
   DailyGoals: undefined;
   Leaderboard: undefined;
   Settings: undefined;
@@ -164,7 +163,6 @@ const App = () => {
           <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
         </Stack.Navigator>
-        <PersistentTimer />
         <Mascot />
       </NavigationContainer>
     </SafeAreaProvider>

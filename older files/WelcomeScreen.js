@@ -1,9 +1,10 @@
+// src/screens/WelcomeScreen.js
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
   SafeAreaView,
   Animated,
   Easing,
@@ -12,20 +13,13 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../../App';
-import { useUserStore } from '../store/useUserStore';
-import { SoundService } from '../services/SoundService';
-import Mascot from '../components/Mascot/Mascot';
+import SoundService from '../services/SoundService';
+import EnhancedMascotDisplay from '../components/mascot/EnhancedMascotDisplay';
+import theme from '../styles/theme';
 
 const { width, height } = Dimensions.get('window');
 
-type NavigationProp = StackNavigationProp<RootStackParamList, 'Welcome'>;
-
-const WelcomeScreen: React.FC = () => {
-  const navigation = useNavigation<NavigationProp>();
-  const { username } = useUserStore();
+const WelcomeScreen = ({ navigation }) => {
   const [currentPage, setCurrentPage] = useState(0);
   const [mascotType, setMascotType] = useState('excited');
   const [mascotMessage, setMascotMessage] = useState('');
@@ -40,7 +34,7 @@ const WelcomeScreen: React.FC = () => {
   const progressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    SoundService.playMenuMusic();
+    SoundService.startMenuMusic();
     
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -97,7 +91,7 @@ const WelcomeScreen: React.FC = () => {
     }, 1500);
     
     return () => {
-      SoundService.stopAll();
+      SoundService.stopMusic();
     };
   }, []);
 
@@ -120,7 +114,7 @@ const WelcomeScreen: React.FC = () => {
     }).start();
   }, [currentPage]);
   
-  const updateMascotForPage = (pageIndex: number) => {
+  const updateMascotForPage = (pageIndex) => {
     let type = 'excited';
     let message = '';
     
@@ -138,11 +132,11 @@ const WelcomeScreen: React.FC = () => {
         message = 'Time to enjoy yourself! 🎊\n\nYour earned time is YOURS to use however you want:\n\n📱 Social apps\n🎮 Gaming\n📺 Videos\n\nYou earned it, you enjoy it! 😊';
         break;
       case 3:
-        type = 'sad';
+        type = 'thoughtful';
         message = 'Quick heads up! ⚠️\n\nWhen your earned time runs out, you\'ll start losing points if you keep using apps.\n\nBut hey - just answer a few questions and CaBBy will help you bounce right back! No stress! 😌';
         break;
       case 4:
-        type = 'happy';
+        type = 'encouraging';
         message = 'Mistakes are your friends! 🤝\n\nWrong answers won\'t hurt your score - they just reset your streak. Think of them as:\n\n🧠 Learning opportunities\n💪 Chances to grow\n🎯 Steps toward mastery\n\nCaBBy believes every expert was once a beginner! ✨';
         break;
       case 5:
@@ -200,7 +194,7 @@ const WelcomeScreen: React.FC = () => {
   ];
   
   const handleNext = () => {
-    SoundService.playButtonClick();
+    SoundService.playButtonPress();
     setShowMascot(false);
     
     if (currentPage < pages.length - 1) {
@@ -227,7 +221,7 @@ const WelcomeScreen: React.FC = () => {
   
   const handlePrevious = () => {
     if (currentPage > 0) {
-      SoundService.playButtonClick();
+      SoundService.playButtonPress();
       setShowMascot(false);
       
       Animated.timing(slideAnim, {
@@ -265,7 +259,7 @@ const WelcomeScreen: React.FC = () => {
   const page = pages[currentPage];
   
   // Create gradient-like background with dynamic colors
-  const Gradient = ({ colors }: { colors: string[] }) => (
+  const Gradient = ({ colors }) => (
     <View style={[styles.gradient, { backgroundColor: colors[0] }]}>
       <View style={[styles.gradientInner, { backgroundColor: colors[1] }]} />
     </View>
@@ -379,18 +373,17 @@ const WelcomeScreen: React.FC = () => {
         </View>
       </Animated.View>
       
-      {/* Mascot */}
-      {showMascot && (
-        <View style={styles.mascotOverlay}>
-          <Mascot type={mascotType} />
-          <View style={styles.mascotMessage}>
-            <Text style={styles.mascotMessageText}>{mascotMessage}</Text>
-            <TouchableOpacity onPress={handleMascotDismiss} style={styles.dismissButton}>
-              <Text style={styles.dismissText}>Got it!</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
+      {/* Enhanced Mascot */}
+      <EnhancedMascotDisplay
+        type={mascotType}
+        position="right"
+        showMascot={showMascot}
+        message={mascotMessage}
+        onDismiss={handleMascotDismiss}
+        onMessageComplete={handleMascotDismiss}
+        autoHide={false} // User can dismiss by tapping
+        fullScreen={true} // Use full screen overlay
+      />
     </SafeAreaView>
   );
 };
@@ -398,7 +391,7 @@ const WelcomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FF9F1C',
+    backgroundColor: theme.colors.primary,
   },
   gradient: {
     ...StyleSheet.absoluteFillObject,
@@ -515,43 +508,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginRight: 8,
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
-  },
-  mascotOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  mascotMessage: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
-    marginTop: 20,
-    maxWidth: 300,
-    alignItems: 'center',
-  },
-  mascotMessageText: {
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 16,
-    color: '#333',
-  },
-  dismissButton: {
-    backgroundColor: '#FF9F1C',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  dismissText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 14,
   },
 });
 

@@ -1,25 +1,28 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Animated,
+  SafeAreaView,
   Dimensions,
+  Platform,
+  Animated,
 } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
-import Icon from 'react-native-vector-icons/Ionicons';
-import { useNavigation } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../App';
-import { SoundService } from '../services/SoundService';
 import { QuestionService } from '../services/QuestionService';
+import { SoundService } from '../services/SoundService';
 import AnimatedBackground from '../components/common/AnimatedBackground';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Categories'>;
+type CategoriesRouteProp = RouteProp<RootStackParamList, 'Categories'>;
 
 interface Category {
   id: string;
@@ -28,24 +31,36 @@ interface Category {
   color: string;
   description: string;
   questionCount: number;
+  gradient: string[];
 }
 
 const CategoriesScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
+  const route = useRoute<CategoriesRouteProp>();
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnims = useRef<Animated.Value[]>([]).current;
+  const [fadeAnim] = useState(new Animated.Value(0));
+  const [slideAnim] = useState(new Animated.Value(50));
+  const scaleAnims = useRef<{ [key: number]: Animated.Value }>({});
+
+  const difficulty = route.params?.difficulty || 'medium';
 
   useEffect(() => {
     loadCategories();
     
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 500,
-      useNativeDriver: true,
-    }).start();
+    // Animate entrance
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, []);
 
   const loadCategories = async () => {
@@ -53,29 +68,80 @@ const CategoriesScreen: React.FC = () => {
     const availableCategories = await QuestionService.getCategories();
     
     // Map to category objects with icons and colors
-    const categoryMap: { [key: string]: { icon: string; color: string; description: string } } = {
-      'Science': { icon: 'flask', color: '#4CAF50', description: 'Physics, Chemistry, Biology' },
-      'Mathematics': { icon: 'calculator', color: '#2196F3', description: 'Algebra, Geometry, Statistics' },
-      'History': { icon: 'time', color: '#FF9800', description: 'World History, Ancient Civilizations' },
-      'Geography': { icon: 'earth', color: '#795548', description: 'Countries, Capitals, Landmarks' },
-      'Literature': { icon: 'book', color: '#9C27B0', description: 'Books, Authors, Poetry' },
-      'Technology': { icon: 'laptop', color: '#00BCD4', description: 'Computers, Internet, Innovation' },
-      'Sports': { icon: 'football', color: '#F44336', description: 'Teams, Players, Records' },
-      'Music': { icon: 'musical-notes', color: '#E91E63', description: 'Artists, Songs, Instruments' },
-      'Movies': { icon: 'film', color: '#FF5722', description: 'Films, Actors, Directors' },
-      'General': { icon: 'bulb', color: '#FFC107', description: 'Mixed Topics & Trivia' },
+    const categoryMap: { [key: string]: { icon: string; color: string; description: string; gradient: string[] } } = {
+      'Science': { 
+        icon: 'flask', 
+        color: '#4ECDC4', 
+        description: 'Physics, Chemistry, Biology',
+        gradient: ['#4ECDC4', '#44A08D']
+      },
+      'Mathematics': { 
+        icon: 'calculator', 
+        color: '#2196F3', 
+        description: 'Algebra, Geometry, Statistics',
+        gradient: ['#2196F3', '#1976D2']
+      },
+      'History': { 
+        icon: 'clock-outline', 
+        color: '#FF9800', 
+        description: 'World History, Ancient Civilizations',
+        gradient: ['#FF9800', '#F57C00']
+      },
+      'Geography': { 
+        icon: 'earth', 
+        color: '#795548', 
+        description: 'Countries, Capitals, Landmarks',
+        gradient: ['#795548', '#5D4037']
+      },
+      'Literature': { 
+        icon: 'book-open-variant', 
+        color: '#9C27B0', 
+        description: 'Books, Authors, Poetry',
+        gradient: ['#9C27B0', '#7B1FA2']
+      },
+      'Technology': { 
+        icon: 'laptop', 
+        color: '#00BCD4', 
+        description: 'Computers, Internet, Innovation',
+        gradient: ['#00BCD4', '#0097A7']
+      },
+      'Sports': { 
+        icon: 'soccer', 
+        color: '#F44336', 
+        description: 'Teams, Players, Records',
+        gradient: ['#F44336', '#D32F2F']
+      },
+      'Music': { 
+        icon: 'music', 
+        color: '#E91E63', 
+        description: 'Artists, Songs, Instruments',
+        gradient: ['#E91E63', '#C2185B']
+      },
+      'Movies': { 
+        icon: 'movie', 
+        color: '#FF5722', 
+        description: 'Films, Actors, Directors',
+        gradient: ['#FF5722', '#D84315']
+      },
+      'General': { 
+        icon: 'lightbulb-on', 
+        color: '#FFC107', 
+        description: 'Mixed Topics & Trivia',
+        gradient: ['#FFC107', '#FFA000']
+      },
     };
 
     const mappedCategories: Category[] = availableCategories.map((catName, index) => {
       const catInfo = categoryMap[catName] || { 
         icon: 'help-circle', 
         color: '#9E9E9E', 
-        description: 'Various topics' 
+        description: 'Various topics',
+        gradient: ['#9E9E9E', '#757575']
       };
       
       // Create animation values for each category
-      if (!scaleAnims[index]) {
-        scaleAnims[index] = new Animated.Value(0);
+      if (!scaleAnims.current[index]) {
+        scaleAnims.current[index] = new Animated.Value(0);
       }
       
       return {
@@ -85,6 +151,7 @@ const CategoriesScreen: React.FC = () => {
         color: catInfo.color,
         description: catInfo.description,
         questionCount: QuestionService.getCategoryQuestionCount(catName),
+        gradient: catInfo.gradient,
       };
     });
 
@@ -93,7 +160,7 @@ const CategoriesScreen: React.FC = () => {
     // Animate categories in with stagger effect
     const staggerTime = 100;
     mappedCategories.forEach((_, index) => {
-      Animated.spring(scaleAnims[index], {
+      Animated.spring(scaleAnims.current[index], {
         toValue: 1,
         delay: index * staggerTime,
         tension: 10,
@@ -110,23 +177,23 @@ const CategoriesScreen: React.FC = () => {
     // Animate the selected category
     const index = categories.findIndex(c => c.id === category.id);
     Animated.sequence([
-      Animated.timing(scaleAnims[index], {
+      Animated.timing(scaleAnims.current[index], {
         toValue: 0.9,
         duration: 100,
         useNativeDriver: true,
       }),
-      Animated.timing(scaleAnims[index], {
+      Animated.timing(scaleAnims.current[index], {
         toValue: 1.1,
         duration: 100,
         useNativeDriver: true,
       }),
-      Animated.timing(scaleAnims[index], {
+      Animated.timing(scaleAnims.current[index], {
         toValue: 1,
         duration: 100,
         useNativeDriver: true,
       }),
     ]).start(() => {
-      navigation.navigate('Quiz', { category: category.name });
+      navigation.navigate('Quiz', { category: category.name, difficulty });
     });
   };
 
@@ -139,7 +206,7 @@ const CategoriesScreen: React.FC = () => {
         style={[
           styles.categoryCard,
           {
-            transform: [{ scale: scaleAnims[index] || 1 }],
+            transform: [{ scale: scaleAnims.current[index] || 1 }],
             opacity: fadeAnim,
           },
         ]}
@@ -154,12 +221,15 @@ const CategoriesScreen: React.FC = () => {
           activeOpacity={0.8}
         >
           <View style={styles.categoryIconContainer}>
-            <Icon name={category.icon} size={40} color="#FFF" />
+            <Icon name={category.icon} size={36} color="#FFF" />
           </View>
           <Text style={styles.categoryName}>{category.name}</Text>
           <Text style={styles.categoryDescription}>{category.description}</Text>
           <View style={styles.questionCountBadge}>
             <Text style={styles.questionCountText}>{category.questionCount} Questions</Text>
+          </View>
+          <View style={styles.difficultyBadge}>
+            <Text style={styles.difficultyText}>{difficulty.toUpperCase()}</Text>
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -167,10 +237,7 @@ const CategoriesScreen: React.FC = () => {
   };
 
   return (
-    <LinearGradient
-      colors={['#FFE4B5', '#FFD700', '#FFA500']}
-      style={styles.container}
-    >
+    <SafeAreaView style={styles.container}>
       <AnimatedBackground />
       
       <View style={styles.header}>
@@ -178,11 +245,17 @@ const CategoriesScreen: React.FC = () => {
           onPress={() => navigation.goBack()} 
           style={styles.backButton}
         >
-                        <Icon name="arrow-back-circle" size={30} color="#FFF" />
+          <Icon name="arrow-left" size={28} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.title}>Choose a Category</Text>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.title}>Choose a Category</Text>
+          <Text style={styles.subtitle}>{difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} Difficulty</Text>
+        </View>
         <View style={styles.placeholder} />
       </View>
+
+      {/* Filler Space */}
+      <View style={styles.fillerSpace} />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -194,7 +267,7 @@ const CategoriesScreen: React.FC = () => {
 
         <Animated.View style={[styles.infoSection, { opacity: fadeAnim }]}>
           <View style={styles.infoCard}>
-                          <Icon name="information-circle-outline" size={24} color="#FFA500" />
+            <Icon name="information-circle-outline" size={24} color="#FF9F1C" />
             <Text style={styles.infoText}>
               Each category contains questions of varying difficulty. 
               Answer correctly to earn points and time rewards!
@@ -202,36 +275,57 @@ const CategoriesScreen: React.FC = () => {
           </View>
         </Animated.View>
       </ScrollView>
-    </LinearGradient>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FFF8E7',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 20,
+    paddingTop: 20,
+    paddingBottom: 10,
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'white',
     justifyContent: 'center',
     alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  headerTitleContainer: {
+    alignItems: 'center',
+    flex: 1,
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: '#FFF',
-    fontFamily: 'Quicksand-Bold',
+    color: '#333',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'Roboto-Bold',
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
   },
   placeholder: {
-    width: 40,
+    width: 44,
+  },
+  fillerSpace: {
+    height: 40,
   },
   scrollContent: {
     flexGrow: 1,
@@ -242,83 +336,98 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    marginBottom: 20,
   },
   categoryCard: {
-    width: (SCREEN_WIDTH - 50) / 2,
-    marginBottom: 15,
+    width: (SCREEN_WIDTH - 60) / 2,
+    marginBottom: 16,
   },
   categoryButton: {
-    height: 180,
-    borderRadius: 20,
-    padding: 15,
+    padding: 20,
+    borderRadius: 16,
     alignItems: 'center',
-    justifyContent: 'center',
+    elevation: 3,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    minHeight: 160,
   },
   selectedCategory: {
-    borderWidth: 3,
-    borderColor: '#FFF',
+    transform: [{ scale: 1.05 }],
+    elevation: 5,
   },
   categoryIconContainer: {
-    width: 60,
-    height: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 30,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   categoryName: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#FFF',
-    marginBottom: 5,
-    fontFamily: 'Quicksand-Bold',
+    marginBottom: 4,
+    textAlign: 'center',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'Roboto-Bold',
   },
   categoryDescription: {
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.9)',
     textAlign: 'center',
-    marginBottom: 10,
-    fontFamily: 'Nunito-Regular',
+    marginBottom: 8,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
   },
   questionCountBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 15,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginBottom: 8,
   },
   questionCountText: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#FFF',
     fontWeight: 'bold',
-    fontFamily: 'Nunito-Bold',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
+  },
+  difficultyBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  difficultyText: {
+    fontSize: 8,
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
   },
   infoSection: {
-    marginTop: 20,
+    marginTop: 10,
   },
   infoCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    padding: 15,
-    borderRadius: 15,
+    backgroundColor: 'white',
+    padding: 16,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
+    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    shadowRadius: 4,
   },
   infoText: {
     flex: 1,
-    marginLeft: 10,
     fontSize: 14,
-    color: '#333',
-    fontFamily: 'Nunito-Regular',
+    color: '#666',
+    marginLeft: 12,
+    lineHeight: 20,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
   },
 });
 

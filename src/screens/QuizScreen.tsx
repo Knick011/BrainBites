@@ -276,6 +276,9 @@ const QuizScreen: React.FC = () => {
         </Animated.View>
       </View>
 
+      {/* Filler Space */}
+      <View style={styles.fillerSpace} />
+
       <ScrollView contentContainerStyle={styles.content}>
         <Animated.View
           style={[
@@ -337,6 +340,9 @@ const QuizScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  fillerSpace: {
+    height: 40,
   },
   loadingContainer: {
     flex: 1,
