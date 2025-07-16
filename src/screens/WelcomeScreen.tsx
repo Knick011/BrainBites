@@ -1,32 +1,43 @@
+// src/screens/WelcomeScreen.tsx - Enhanced onboarding experience
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
   SafeAreaView,
   Animated,
   Easing,
   Dimensions,
-  Platform
+  Platform,
+  StatusBar,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../App';
-import { useUserStore } from '../store/useUserStore';
 import { SoundService } from '../services/SoundService';
+import EnhancedMascotDisplay, { MascotType } from '../components/mascot/EnhancedMascotDisplay';
+import theme from '../styles/theme';
 
 const { width, height } = Dimensions.get('window');
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Welcome'>;
 
+interface WelcomePage {
+  title: string;
+  text: string;
+  icon: string;
+  gradient: string[];
+  isLast?: boolean;
+}
+
 const WelcomeScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
-  const { username } = useUserStore();
+  
   const [currentPage, setCurrentPage] = useState(0);
-  const [mascotType, setMascotType] = useState('excited');
+  const [mascotType, setMascotType] = useState<MascotType>('excited');
   const [mascotMessage, setMascotMessage] = useState('');
   const [showMascot, setShowMascot] = useState(false);
   
@@ -39,7 +50,7 @@ const WelcomeScreen: React.FC = () => {
   const progressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    SoundService.playMenuMusic();
+    SoundService.startMenuMusic();
     
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -96,7 +107,7 @@ const WelcomeScreen: React.FC = () => {
     }, 1500);
     
     return () => {
-      SoundService.stopAll();
+      SoundService.stopMusic();
     };
   }, []);
 
@@ -120,7 +131,7 @@ const WelcomeScreen: React.FC = () => {
   }, [currentPage]);
   
   const updateMascotForPage = (pageIndex: number) => {
-    let type = 'excited';
+    let type: MascotType = 'excited';
     let message = '';
     
     switch(pageIndex) {
@@ -138,15 +149,15 @@ const WelcomeScreen: React.FC = () => {
         break;
       case 3:
         type = 'sad';
-        message = 'Quick heads up! ⚠️\n\nWhen your earned time runs out, you\'ll start losing points if you keep using apps.\n\nBut hey - just answer a few questions and CaBBy will help you bounce right back! No stress! 😌';
+        message = 'Quick heads up! ⚠️\n\nWhen your earned time runs out, you\'ll start losing points if you keep using apps.\n\nBut hey - just answer a few questions and I\'ll help you bounce right back! No stress! 😌';
         break;
       case 4:
         type = 'happy';
-        message = 'Mistakes are your friends! 🤝\n\nWrong answers won\'t hurt your score - they just reset your streak. Think of them as:\n\n🧠 Learning opportunities\n💪 Chances to grow\n🎯 Steps toward mastery\n\nCaBBy believes every expert was once a beginner! ✨';
+        message = 'Mistakes are your friends! 🤝\n\nWrong answers won\'t hurt your score - they just reset your streak. Think of them as:\n\n🧠 Learning opportunities\n💪 Chances to grow\n🎯 Steps toward mastery\n\nI believe every expert was once a beginner! ✨';
         break;
       case 5:
         type = 'excited';
-        message = 'You\'re absolutely ready! 🚀\n\nRemember, this is YOUR journey. Learn at your pace, earn your time, and most importantly - have fun with it!\n\nCaBBy believes in you! Let\'s do this! 💪✨';
+        message = 'You\'re absolutely ready! 🚀\n\nRemember, this is YOUR journey. Learn at your pace, earn your time, and most importantly - have fun with it!\n\nI believe in you! Let\'s do this! 💪✨';
         break;
       default:
         type = 'excited';
@@ -158,7 +169,7 @@ const WelcomeScreen: React.FC = () => {
     setShowMascot(true);
   };
 
-  const pages = [
+  const pages: WelcomePage[] = [
     {
       title: "Welcome to Brain Bites!",
       text: "Hey there! Ready to turn learning into your superpower? With Brain Bites, every answer you get right earns you more time to enjoy your favorite apps!",
@@ -199,7 +210,7 @@ const WelcomeScreen: React.FC = () => {
   ];
   
   const handleNext = () => {
-    SoundService.playButtonClick();
+    SoundService.playButtonPress();
     setShowMascot(false);
     
     if (currentPage < pages.length - 1) {
@@ -226,7 +237,7 @@ const WelcomeScreen: React.FC = () => {
   
   const handlePrevious = () => {
     if (currentPage > 0) {
-      SoundService.playButtonClick();
+      SoundService.playButtonPress();
       setShowMascot(false);
       
       Animated.timing(slideAnim, {
@@ -264,7 +275,7 @@ const WelcomeScreen: React.FC = () => {
   const page = pages[currentPage];
   
   // Create gradient-like background with dynamic colors
-  const Gradient = ({ colors }: { colors: string[] }) => (
+  const GradientBackground: React.FC<{ colors: string[] }> = ({ colors }) => (
     <View style={[styles.gradient, { backgroundColor: colors[0] }]}>
       <View style={[styles.gradientInner, { backgroundColor: colors[1] }]} />
     </View>
@@ -272,7 +283,8 @@ const WelcomeScreen: React.FC = () => {
   
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Gradient colors={page.gradient} />
+      <StatusBar backgroundColor={page.gradient[0]} barStyle="light-content" />
+      <GradientBackground colors={page.gradient} />
       
       <Animated.View 
         style={[
@@ -326,6 +338,7 @@ const WelcomeScreen: React.FC = () => {
                     setTimeout(() => updateMascotForPage(index), 300);
                   }
                 }}
+                activeOpacity={0.7}
               />
             ))}
           </View>
@@ -337,7 +350,7 @@ const WelcomeScreen: React.FC = () => {
                 {
                   width: progressAnim.interpolate({
                     inputRange: [0, pages.length - 1],
-                    outputRange: ['25%', '100%']
+                    outputRange: ['0%', '100%']
                   })
                 }
               ]}
@@ -351,13 +364,26 @@ const WelcomeScreen: React.FC = () => {
         
         {/* Navigation buttons */}
         <View style={styles.buttonContainer}>
+          {/* Previous Button */}
+          {currentPage > 0 && (
+            <Animated.View style={{ opacity: buttonAnim }}>
+              <TouchableOpacity 
+                style={[styles.prevButton]}
+                onPress={handlePrevious}
+                activeOpacity={0.8}
+              >
+                <Icon name="arrow-left" size={20} color="white" />
+                <Text style={styles.prevText}>Back</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+          
           <View style={{ flex: 1 }} />
           
+          {/* Next/Finish Button */}
           <Animated.View
             style={{
-              transform: [
-                { scale: buttonAnim }
-              ],
+              transform: [{ scale: buttonAnim }],
               opacity: fadeAnim
             }}
           >
@@ -378,17 +404,17 @@ const WelcomeScreen: React.FC = () => {
         </View>
       </Animated.View>
       
-      {/* Mascot Message */}
-      {showMascot && (
-        <View style={styles.mascotOverlay}>
-          <View style={styles.mascotMessage}>
-            <Text style={styles.mascotMessageText}>{mascotMessage}</Text>
-            <TouchableOpacity onPress={handleMascotDismiss} style={styles.dismissButton}>
-              <Text style={styles.dismissText}>Got it!</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
+      {/* Enhanced Mascot */}
+      <EnhancedMascotDisplay
+        type={mascotType}
+        position="right"
+        showMascot={showMascot}
+        message={mascotMessage}
+        onDismiss={handleMascotDismiss}
+        onMessageComplete={handleMascotDismiss}
+        autoHide={false} // User can dismiss by tapping
+        fullScreen={true} // Use full screen overlay
+      />
     </SafeAreaView>
   );
 };
@@ -396,7 +422,7 @@ const WelcomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FF9F1C',
+    backgroundColor: theme.colors.primary,
   },
   gradient: {
     ...StyleSheet.absoluteFillObject,
@@ -430,11 +456,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 40,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 12,
+    ...theme.shadows.lg,
   },
   title: {
     fontSize: 32,
@@ -491,9 +513,26 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
+  },
+  prevButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  prevText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 16,
+    marginLeft: 8,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif-medium',
   },
   nextButton: {
     paddingVertical: 16,
@@ -501,11 +540,7 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    ...theme.shadows.lg,
   },
   nextText: {
     color: 'white',
@@ -513,43 +548,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginRight: 8,
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
-  },
-  mascotOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  mascotMessage: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
-    marginTop: 20,
-    maxWidth: 300,
-    alignItems: 'center',
-  },
-  mascotMessageText: {
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 16,
-    color: '#333',
-  },
-  dismissButton: {
-    backgroundColor: '#FF9F1C',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  dismissText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 14,
   },
 });
 

@@ -1,102 +1,195 @@
-// src/styles/theme.ts
-export default {
+// src/styles/theme.ts - TypeScript theme system
+import { Platform } from 'react-native';
+
+interface Colors {
+  primary: string;
+  secondary: string;
+  accent: string;
+  success: string;
+  warning: string;
+  error: string;
+  background: string;
+  cardBackground: string;
+  white: string;
+  textDark: string;
+  textLight: string;
+  textMuted: string;
+  successLight: string;
+  errorLight: string;
+  warningLight: string;
+  overlay: string;
+}
+
+interface Spacing {
+  xs: number;
+  sm: number;
+  md: number;
+  lg: number;
+  xl: number;
+  xxl: number;
+}
+
+interface BorderRadius {
+  sm: number;
+  md: number;
+  lg: number;
+  xl: number;
+  full: number;
+}
+
+interface Shadow {
+  shadowColor: string;
+  shadowOffset: { width: number; height: number };
+  shadowOpacity: number;
+  shadowRadius: number;
+  elevation: number;
+}
+
+interface Shadows {
+  sm: Shadow;
+  md: Shadow;
+  lg: Shadow;
+  btn: Shadow;
+}
+
+interface Typography {
+  fontSize: {
+    xs: number;
+    sm: number;
+    md: number;
+    lg: number;
+    xl: number;
+    xxl: number;
+    title: number;
+  };
+  fontWeight: {
+    normal: string;
+    medium: string;
+    semibold: string;
+    bold: string;
+  };
+}
+
+interface Animation {
+  fast: number;
+  normal: number;
+  slow: number;
+}
+
+interface Icons {
+  sm: number;
+  md: number;
+  lg: number;
+  xl: number;
+}
+
+interface Fonts {
+  primary: string;
+  bold: string;
+  light: string;
+}
+
+interface Theme {
+  colors: Colors;
+  fonts: Fonts;
+  spacing: Spacing;
+  borderRadius: BorderRadius;
+  shadows: Shadows;
+  typography: Typography;
+  animation: Animation;
+  icons: Icons;
+}
+
+const theme: Theme = {
+  // Core Colors - enhanced palette
   colors: {
-    primary: '#FF9F1C',
-    primaryDark: '#E8890A',
-    primaryLight: '#FFB84D',
-    secondary: '#4A90E2',
-    accent: '#50C878',
-    
-    // Quiz Colors (matching your image)
-    quizPrimary: '#FF9F1C',
-    quizSecondary: '#FFB84D', 
-    quizTertiary: '#FFD07B',
-    
-    // Background colors
-    background: '#FAFAFA',
-    backgroundLight: '#FFFFFF',
-    backgroundDark: '#F5F5F5',
-    
-    // Text colors
-    textPrimary: '#333333',
-    textSecondary: '#666666',
-    textLight: '#999999',
-    textDark: '#1A1A1A',
-    textWhite: '#FFFFFF',
-    
-    // Status colors
-    success: '#4CAF50',
-    successLight: '#E8F5E8',
-    error: '#F44336',
-    errorLight: '#FFEBEE',
-    warning: '#FF9800',
-    warningLight: '#FFF3E0',
-    info: '#2196F3',
-    infoLight: '#E3F2FD',
-    
-    // Option colors for quiz
-    optionDefault: '#F5F5F5',
-    optionSelected: '#E3F2FD',
-    optionCorrect: '#E8F5E8',
-    optionIncorrect: '#FFEBEE',
-    
-    // Neutral colors
-    white: '#FFFFFF',
-    black: '#000000',
-    gray: {
-      50: '#FAFAFA',
-      100: '#F5F5F5',
-      200: '#EEEEEE',
-      300: '#E0E0E0',
-      400: '#BDBDBD',
-      500: '#9E9E9E',
-      600: '#757575',
-      700: '#616161',
-      800: '#424242',
-      900: '#212121',
-    },
-    
-    // Card colors
-    card: '#FFFFFF',
-    cardBorder: '#E0E0E0',
-    cardShadow: 'rgba(0, 0, 0, 0.1)',
-    
-    // Overlay colors
-    overlay: 'rgba(0, 0, 0, 0.5)',
-    overlayLight: 'rgba(0, 0, 0, 0.3)',
+    primary: '#FF9F1C',       // Primary orange
+    secondary: '#FFB347',     // Secondary orange
+    accent: '#5D9CEC',        // Accent blue
+    success: '#4CD964',       // Success green
+    warning: '#FFCC00',       // Warning yellow
+    error: '#FF3B30',         // Error red
+    background: '#FFF8E7',    // Background light cream
+    cardBackground: '#FFFFFF', // Card background
+    white: '#FFFFFF',         // White
+    textDark: '#333333',      // Text dark
+    textLight: '#FFFFFF',     // Text light
+    textMuted: '#777777',     // Text muted
+    successLight: 'rgba(76, 217, 100, 0.15)',
+    errorLight: 'rgba(255, 59, 48, 0.15)',
+    warningLight: 'rgba(255, 204, 0, 0.15)',
+    overlay: 'rgba(0, 0, 0, 0.7)',
   },
   
+  // Fonts - more playful options
   fonts: {
-    primary: 'Nunito-Regular',
-    primaryBold: 'Nunito-Bold',
-    secondary: 'Quicksand-Regular',
-    secondaryBold: 'Quicksand-Bold',
+    primary: Platform.OS === 'ios' ? 'Avenir-Medium' : 'Roboto',
+    bold: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'Roboto-Bold',
+    light: Platform.OS === 'ios' ? 'Avenir-Light' : 'Roboto-Light',
   },
   
-  typography: {
-    fontFamily: {
-      regular: 'Nunito-Regular',
-      bold: 'Nunito-Bold',
-      secondary: 'Quicksand-Regular',
-      secondaryBold: 'Quicksand-Bold',
+  // Enhanced Spacing system
+  spacing: {
+    xs: 4,
+    sm: 8,
+    md: 16,
+    lg: 24,
+    xl: 32,
+    xxl: 48,
+  },
+  
+  // Border Radius
+  borderRadius: {
+    sm: 8,
+    md: 16,
+    lg: 24,
+    xl: 32,
+    full: 9999,
+  },
+  
+  // Enhanced Shadows
+  shadows: {
+    sm: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.18,
+      shadowRadius: 2,
+      elevation: 2,
     },
+    md: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.22,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    lg: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 8,
+      elevation: 5,
+    },
+    // Special shadow for buttons
+    btn: {
+      shadowColor: 'rgba(255, 159, 28, 0.4)',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 1,
+      shadowRadius: 6,
+      elevation: 4,
+    },
+  },
+  
+  // Typography
+  typography: {
     fontSize: {
       xs: 12,
       sm: 14,
-      base: 16,
+      md: 16,
       lg: 18,
-      xl: 20,
-      '2xl': 24,
-      '3xl': 30,
-      '4xl': 36,
-      '5xl': 48,
-    },
-    lineHeight: {
-      tight: 1.25,
-      snug: 1.375,
-      normal: 1.5,
-      relaxed: 1.625,
-      loose: 2,
+      xl: 22,
+      xxl: 28,
+      title: 32,
     },
     fontWeight: {
       normal: '400',
@@ -106,77 +199,20 @@ export default {
     },
   },
   
-  spacing: {
-    xs: 4,
-    sm: 8,
-    md: 16,
-    lg: 24,
-    xl: 32,
-    '2xl': 48,
-    '3xl': 64,
+  // Animation durations
+  animation: {
+    fast: 200,
+    normal: 300,
+    slow: 500,
   },
   
-  borderRadius: {
-    none: 0,
-    sm: 4,
-    base: 8,
-    md: 12,
-    lg: 16,
-    xl: 20,
-    '2xl': 24,
-    full: 9999,
-  },
-  
-  shadows: {
-    sm: {
-      shadowColor: '#000',
-      shadowOffset: {
-        width: 0,
-        height: 2,
-      },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-    },
-    md: {
-      shadowColor: '#000',
-      shadowOffset: {
-        width: 0,
-        height: 4,
-      },
-      shadowOpacity: 0.15,
-      shadowRadius: 8,
-      elevation: 5,
-    },
-    lg: {
-      shadowColor: '#000',
-      shadowOffset: {
-        width: 0,
-        height: 8,
-      },
-      shadowOpacity: 0.2,
-      shadowRadius: 16,
-      elevation: 8,
-    },
-  },
-  
-  animations: {
-    duration: {
-      fast: 200,
-      normal: 300,
-      slow: 500,
-    },
-    easing: {
-      easeInOut: 'ease-in-out',
-      easeOut: 'ease-out',
-      easeIn: 'ease-in',
-    },
-  },
-  
-  layout: {
-    headerHeight: 80,
-    tabBarHeight: 60,
-    borderWidth: 1,
-    borderWidthThick: 2,
+  // Icons sizes
+  icons: {
+    sm: 16,
+    md: 24,
+    lg: 32,
+    xl: 48,
   },
 };
+
+export default theme;

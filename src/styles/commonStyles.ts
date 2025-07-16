@@ -1,41 +1,33 @@
+// src/styles/commonStyles.ts
 import { StyleSheet } from 'react-native';
 import theme from './theme';
 
+// Common styles that match the web version's look and feel
 const commonStyles = StyleSheet.create({
-  // Containers
+  // Screen containers
   safeArea: {
     flex: 1,
     backgroundColor: theme.colors.background,
   },
-  
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    padding: theme.spacing.md,
   },
   
-  scrollView: {
-    flex: 1,
-  },
-  
-  scrollContent: {
-    flexGrow: 1,
-    paddingBottom: 100, // Space for mascot
-  },
-  
-  section: {
-    marginBottom: theme.spacing.lg,
-  },
-  
-  // Cards
+  // Cards and sections
   card: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.borderRadius.md,
     padding: theme.spacing.md,
     ...theme.shadows.md,
+    marginBottom: theme.spacing.md,
   },
-  
-  cardPressed: {
-    transform: [{ scale: 0.98 }],
+  section: {
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.borderRadius.md,
+    padding: theme.spacing.md,
+    ...theme.shadows.md,
+    marginBottom: theme.spacing.lg,
   },
   
   // Headers
@@ -43,241 +35,248 @@ const commonStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
+    marginTop: theme.spacing.sm,
   },
-  
   headerTitle: {
-    fontSize: theme.typography.fontSize['2xl'],
-    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: theme.typography.fontSize.xl,
+    fontWeight: theme.typography.fontWeight.bold,
     color: theme.colors.textDark,
   },
   
   // Typography
-  h1: {
-    fontSize: theme.typography.fontSize['4xl'],
-    fontFamily: theme.typography.fontFamily.black,
+  title: {
+    fontSize: theme.typography.fontSize.title,
+    fontWeight: theme.typography.fontWeight.bold,
     color: theme.colors.textDark,
     marginBottom: theme.spacing.sm,
   },
-  
-  h2: {
-    fontSize: theme.typography.fontSize['3xl'],
-    fontFamily: theme.typography.fontFamily.bold,
+  subtitle: {
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.semibold,
     color: theme.colors.textDark,
-    marginBottom: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
   },
-  
-  h3: {
-    fontSize: theme.typography.fontSize['2xl'],
-    fontFamily: theme.typography.fontFamily.bold,
-    color: theme.colors.textDark,
-    marginBottom: theme.spacing.xs,
-  },
-  
-  body: {
+  text: {
     fontSize: theme.typography.fontSize.md,
-    fontFamily: theme.typography.fontFamily.regular,
     color: theme.colors.textDark,
-    lineHeight: theme.typography.fontSize.md * theme.typography.lineHeight.normal,
+    marginBottom: theme.spacing.sm,
   },
-  
-  caption: {
+  smallText: {
     fontSize: theme.typography.fontSize.sm,
-    fontFamily: theme.typography.fontFamily.regular,
     color: theme.colors.textMuted,
   },
   
   // Buttons
   button: {
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.borderRadius.full,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.lg,
-    borderRadius: theme.borderRadius.full,
-    ...theme.shadows.md,
   },
-  
   primaryButton: {
     backgroundColor: theme.colors.primary,
-    ...theme.shadows.primary,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.borderRadius.full,
+    ...theme.shadows.btn,
   },
-  
   secondaryButton: {
-    backgroundColor: theme.colors.card,
-    borderWidth: 2,
+    backgroundColor: theme.colors.white,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
     borderColor: theme.colors.primary,
   },
-  
   buttonText: {
+    color: theme.colors.white,
+    fontWeight: theme.typography.fontWeight.semibold,
     fontSize: theme.typography.fontSize.md,
-    fontFamily: theme.typography.fontFamily.bold,
-    color: theme.colors.textLight,
+    marginLeft: theme.spacing.xs,
   },
-  
   secondaryButtonText: {
     color: theme.colors.primary,
-  },
-  
-  // Input fields
-  input: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.borderRadius.md,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
+    fontWeight: theme.typography.fontWeight.semibold,
     fontSize: theme.typography.fontSize.md,
-    fontFamily: theme.typography.fontFamily.regular,
-    color: theme.colors.textDark,
-    borderWidth: 1,
-    borderColor: theme.colors.gray[200],
-    ...theme.shadows.sm,
+    marginLeft: theme.spacing.xs,
   },
   
-  inputFocused: {
-    borderColor: theme.colors.primary,
-    borderWidth: 2,
-  },
-  
-  // Icons
-  icon: {
-    width: 24,
-    height: 24,
-  },
-  
-  iconSmall: {
-    width: 16,
-    height: 16,
-  },
-  
-  iconLarge: {
-    width: 32,
-    height: 32,
-  },
-  
-  // Loading states
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: theme.colors.background,
-  },
-  
-  loadingText: {
-    marginTop: theme.spacing.md,
-    fontSize: theme.typography.fontSize.md,
-    color: theme.colors.textMuted,
-    fontFamily: theme.typography.fontFamily.regular,
-  },
-  
-  // Error states
-  errorContainer: {
-    backgroundColor: theme.colors.errorLight,
-    borderRadius: theme.borderRadius.md,
-    padding: theme.spacing.md,
-    borderWidth: 1,
-    borderColor: theme.colors.error,
-  },
-  
-  errorText: {
-    color: theme.colors.error,
-    fontSize: theme.typography.fontSize.sm,
-    fontFamily: theme.typography.fontFamily.regular,
-  },
-  
-  // Success states
-  successContainer: {
-    backgroundColor: theme.colors.successLight,
-    borderRadius: theme.borderRadius.md,
-    padding: theme.spacing.md,
-    borderWidth: 1,
-    borderColor: theme.colors.success,
-  },
-  
-  successText: {
-    color: theme.colors.success,
-    fontSize: theme.typography.fontSize.sm,
-    fontFamily: theme.typography.fontFamily.regular,
-  },
-  
-  // Dividers
-  divider: {
-    height: 1,
-    backgroundColor: theme.colors.gray[200],
-    marginVertical: theme.spacing.md,
-  },
-  
-  // Badges
-  badge: {
-    backgroundColor: theme.colors.primary,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: theme.spacing.xs,
-    borderRadius: theme.borderRadius.full,
-    minWidth: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  
-  badgeText: {
-    color: theme.colors.textLight,
-    fontSize: theme.typography.fontSize.xs,
-    fontFamily: theme.typography.fontFamily.bold,
-  },
-  
-  // Mascot-specific spacing
-  mascotSafeArea: {
-    paddingBottom: 200, // Extra space for mascot
-  },
-  
-  // Quiz-specific styles
-  quizContainer: {
-    backgroundColor: theme.colors.card,
+  // Question styles
+  questionCard: {
+    backgroundColor: theme.colors.white,
     borderRadius: theme.borderRadius.lg,
     padding: theme.spacing.lg,
     ...theme.shadows.lg,
+    marginTop: theme.spacing.lg,
+  },
+  questionText: {
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.bold,
+    marginBottom: theme.spacing.lg,
+    color: theme.colors.textDark,
+    lineHeight: 24,
   },
   
+  // Option buttons for quiz
   optionButton: {
-    backgroundColor: theme.colors.gray[50],
-    borderRadius: theme.borderRadius.md,
+    backgroundColor: '#f8f9fa',
     padding: theme.spacing.md,
+    borderRadius: theme.borderRadius.md,
     marginBottom: theme.spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
   },
-  
   optionButtonSelected: {
     borderColor: theme.colors.primary,
-    backgroundColor: theme.colors.primaryLight,
+    borderWidth: 2,
+  },
+  correctOption: {
+    backgroundColor: 'rgba(46, 204, 113, 0.15)',
+    borderColor: 'rgba(46, 204, 113, 0.5)',
+    borderWidth: 2,
+  },
+  incorrectOption: {
+    backgroundColor: 'rgba(231, 76, 60, 0.15)',
+    borderColor: 'rgba(231, 76, 60, 0.5)',
+    borderWidth: 2,
+  },
+  optionKey: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.bold,
+    marginRight: theme.spacing.sm,
+    width: 20,
+  },
+  optionText: {
+    fontSize: theme.typography.fontSize.md,
+    flex: 1,
   },
   
-  optionButtonCorrect: {
-    borderColor: theme.colors.success,
-    backgroundColor: theme.colors.successLight,
+  // Progress bars
+  progressContainer: {
+    width: '100%',
+    height: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    borderRadius: theme.borderRadius.full,
+    overflow: 'hidden',
+    marginVertical: theme.spacing.sm,
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: theme.borderRadius.full,
   },
   
-  optionButtonIncorrect: {
-    borderColor: theme.colors.error,
-    backgroundColor: theme.colors.errorLight,
+  // Streak counter
+  streakCounter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.borderRadius.full,
+    ...theme.shadows.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  streakCounterText: {
+    marginLeft: theme.spacing.xs,
+    fontWeight: theme.typography.fontWeight.semibold,
+  },
+  streakPulse: {
+    // Animation applied via animated API
+  },
+  streakMilestone: {
+    backgroundColor: theme.colors.primary,
+  },
+  streakMilestoneText: {
+    color: theme.colors.white,
   },
   
-  // Animations
-  fadeIn: {
-    opacity: 1,
+  // Explanation box
+  explanationContainer: {
+    marginTop: theme.spacing.lg,
+    padding: theme.spacing.lg,
+    borderRadius: theme.borderRadius.lg,
+    ...theme.shadows.md,
+  },
+  correctExplanation: {
+    backgroundColor: 'rgba(46, 204, 113, 0.15)',
+    borderWidth: 2,
+    borderColor: 'rgba(46, 204, 113, 0.3)',
+  },
+  incorrectExplanation: {
+    backgroundColor: 'rgba(231, 76, 60, 0.15)',
+    borderWidth: 2,
+    borderColor: 'rgba(231, 76, 60, 0.3)',
+  },
+  explanationTitle: {
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.bold,
+    marginBottom: theme.spacing.sm,
   },
   
-  fadeOut: {
-    opacity: 0,
+  // Welcome screen
+  welcomeContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: theme.spacing.lg,
+    backgroundColor: theme.colors.primary, // Gradient applied via component
+  },
+  welcomeLogo: {
+    width: 150,
+    height: 150,
+    marginBottom: theme.spacing.xl,
+    // Animation applied via animated API
+  },
+  welcomeButton: {
+    backgroundColor: theme.colors.white,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.xl,
+    borderRadius: theme.borderRadius.full,
+    ...theme.shadows.lg,
+  },
+  welcomeButtonText: {
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.primary,
   },
   
-  slideIn: {
-    transform: [{ translateY: 0 }],
+  // Category selection
+  categoryCard: {
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+    alignItems: 'center',
+    ...theme.shadows.sm,
+    borderWidth: 2,
+    borderColor: theme.colors.primary,
+    width: '48%',
   },
-  
-  slideOut: {
-    transform: [{ translateY: 50 }],
+  categoryIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: theme.colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: theme.spacing.sm,
+  },
+  categoryName: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: theme.typography.fontWeight.bold,
+    marginBottom: theme.spacing.xs,
+    textAlign: 'center',
+  },
+  categorySubtext: {
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textMuted,
+    textAlign: 'center',
   },
 });
 
