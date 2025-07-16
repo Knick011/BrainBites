@@ -1,310 +1,210 @@
-// src/services/SoundService.ts - Built from scratch
-import { Platform } from 'react-native';
-
-// Import sound library (you'll need to install react-native-sound)
-// npm install react-native-sound
-// @ts-ignore - Type definitions might not be available
 import Sound from 'react-native-sound';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-interface SoundEffect {
-  sound: Sound | null;
-  volume: number;
+Sound.setCategory('Playback');
+
+interface SoundEffects {
+  correct: Sound | null;
+  incorrect: Sound | null;
+  buttonpress: Sound | null;
+  gamemusic: Sound | null;
+  menumusic: Sound | null;
+  streak: Sound | null;
 }
 
-class SoundService {
-  private soundsEnabled: boolean = true;
-  private musicEnabled: boolean = true;
-  private soundEffectsVolume: number = 0.7;
-  private musicVolume: number = 0.3;
-  private currentMusic: Sound | null = null;
-  private soundEffects: Map<string, SoundEffect> = new Map();
-  private isInitialized: boolean = false;
-  
-  constructor() {
-    this.initializeAudio();
-  }
-  
-  private async initializeAudio() {
-    try {
-      // Enable playback in silence mode (iOS)
-      Sound.setCategory('Playback');
-      
-      // Preload sound effects
-      await this.preloadSounds();
-      
-      this.isInitialized = true;
-      console.log('✓ SoundService initialized successfully');
-    } catch (error) {
-      console.error('❌ Error initializing SoundService:', error);
-      this.isInitialized = false;
-    }
-  }
-  
-  private async preloadSounds() {
+class SoundServiceClass {
+  private sounds: SoundEffects = {
+    correct: null,
+    incorrect: null,
+    buttonpress: null,
+    gamemusic: null,
+    menumusic: null,
+    streak: null,
+  };
+
+  private isMuted = false;
+  private musicVolume = 0.3;
+  private effectsVolume = 0.6;
+  private SETTINGS_KEY = '@BrainBites:soundSettings';
+
+  async initialize() {
+    // Load sound settings
+    await this.loadSettings();
+
+    // Pre-load all sound files - handle missing files gracefully
     const soundFiles = {
-      // Quiz sounds
-      correct: require('../assets/sounds/correct.mp3'),
-      incorrect: require('../assets/sounds/incorrect.mp3'),
-      streak: require('../assets/sounds/streak.mp3'),
-      
-      // UI sounds
-      buttonPress: require('../assets/sounds/button.mp3'),
-      notification: require('../assets/sounds/notification.mp3'),
-      
-      // Background music
-      menuMusic: require('../assets/sounds/menu_music.mp3'),
-      gameMusic: require('../assets/sounds/game_music.mp3'),
+      correct: 'correct.mp3',
+      incorrect: 'incorrect.mp3',
+      buttonpress: 'buttonpress.mp3',
+      gamemusic: 'gamemusic.mp3',
+      menumusic: 'menumusic.mp3',
+      streak: 'streak.mp3',
     };
-    
-    // Preload each sound effect
-    for (const [key, soundFile] of Object.entries(soundFiles)) {
-      try {
-        const sound = new Sound(soundFile, (error: any) => {
-          if (error) {
-            console.log(`Failed to load sound ${key}:`, error);
-            return;
+
+    Object.entries(soundFiles).forEach(([key, filename]) => {
+      this.sounds[key as keyof SoundEffects] = new Sound(filename, Sound.MAIN_BUNDLE, (error) => {
+        if (error) {
+          console.log(`Sound file ${filename} not found - app will work without this sound`);
+          // Set to null so the app continues to work
+          this.sounds[key as keyof SoundEffects] = null;
+        } else {
+          console.log(`Successfully loaded ${filename}`);
+          // Set properties for background music
+          if ((key === 'gamemusic' || key === 'menumusic') && this.sounds[key as keyof SoundEffects]) {
+            this.sounds[key as keyof SoundEffects]!.setNumberOfLoops(-1); // Loop infinitely
+            this.sounds[key as keyof SoundEffects]!.setVolume(this.musicVolume);
           }
-          
-          // Set volume for sound effects vs music
-          const volume = key.includes('Music') ? this.musicVolume : this.soundEffectsVolume;
-          sound.setVolume(volume);
-          
-          this.soundEffects.set(key, {
-            sound: sound,
-            volume: volume
-          });
-          
-          console.log(`✓ Loaded sound: ${key}`);
-        });
-      } catch (error) {
-        console.error(`❌ Error loading sound ${key}:`, error);
-        // Add placeholder entry so we don't crash
-        this.soundEffects.set(key, {
-          sound: null,
-          volume: this.soundEffectsVolume
-        });
-      }
-    }
-  }
-  
-  // Play sound effect
-  private playSound(soundKey: string, volume?: number) {
-    if (!this.isInitialized || !this.soundsEnabled) {
-      return;
-    }
-    
-    const soundEffect = this.soundEffects.get(soundKey);
-    if (!soundEffect || !soundEffect.sound) {
-      console.warn(`Sound not found: ${soundKey}`);
-      return;
-    }
-    
-    try {
-      // Set volume if provided
-      if (volume !== undefined) {
-        soundEffect.sound.setVolume(volume);
-      }
-      
-      // Play the sound
-      soundEffect.sound.play((success: boolean) => {
-        if (!success) {
-          console.log(`Failed to play sound: ${soundKey}`);
         }
       });
+    });
+  }
+
+  private async loadSettings() {
+    try {
+      const settings = await AsyncStorage.getItem(this.SETTINGS_KEY);
+      if (settings) {
+        const parsed = JSON.parse(settings);
+        this.isMuted = parsed.isMuted || false;
+        this.musicVolume = parsed.musicVolume || 0.3;
+        this.effectsVolume = parsed.effectsVolume || 0.6;
+      }
     } catch (error) {
-      console.error(`Error playing sound ${soundKey}:`, error);
+      console.error('Failed to load sound settings:', error);
     }
   }
-  
-  // Quiz-specific sounds
+
+  private async saveSettings() {
+    try {
+      await AsyncStorage.setItem(
+        this.SETTINGS_KEY,
+        JSON.stringify({
+          isMuted: this.isMuted,
+          musicVolume: this.musicVolume,
+          effectsVolume: this.effectsVolume,
+        })
+      );
+    } catch (error) {
+      console.error('Failed to save sound settings:', error);
+    }
+  }
+
+  playSound(soundName: keyof SoundEffects, callback?: () => void) {
+    if (this.isMuted) {
+      callback?.();
+      return;
+    }
+
+    const sound = this.sounds[soundName];
+    if (sound) {
+      sound.setVolume(soundName === 'gamemusic' || soundName === 'menumusic' ? this.musicVolume : this.effectsVolume);
+      sound.play((success) => {
+        if (!success) {
+          console.log(`Failed to play ${soundName} sound`);
+        }
+        callback?.();
+      });
+    } else {
+      callback?.();
+    }
+  }
+
+  // Specific sound methods for easier use
   playCorrect() {
     this.playSound('correct');
   }
-  
+
   playIncorrect() {
     this.playSound('incorrect');
   }
-  
+
+  playButtonClick() {
+    this.playSound('buttonpress');
+  }
+
   playStreak() {
-    this.playSound('streak', 0.8); // Slightly louder for celebration
+    this.playSound('streak');
   }
-  
-  // UI sounds
-  playButtonPress() {
-    this.playSound('buttonPress', 0.5); // Quieter for UI feedback
-  }
-  
-  playNotification() {
-    this.playSound('notification');
-  }
-  
-  // Background music
-  startMenuMusic() {
-    if (!this.musicEnabled) return;
-    
-    this.stopMusic(); // Stop any current music
-    
-    const menuMusic = this.soundEffects.get('menuMusic');
-    if (menuMusic && menuMusic.sound) {
-      try {
-        menuMusic.sound.setNumberOfLoops(-1); // Loop indefinitely
-        menuMusic.sound.setVolume(this.musicVolume);
-        menuMusic.sound.play((success: boolean) => {
-          if (success) {
-            this.currentMusic = menuMusic.sound;
-            console.log('🎵 Menu music started');
-          }
-        });
-      } catch (error) {
-        console.error('Error starting menu music:', error);
-      }
+
+  playGameMusic() {
+    if (!this.isMuted && this.sounds.gamemusic) {
+      this.sounds.gamemusic.play();
     }
   }
-  
-  startGameMusic() {
-    if (!this.musicEnabled) return;
-    
-    this.stopMusic(); // Stop any current music
-    
-    const gameMusic = this.soundEffects.get('gameMusic');
-    if (gameMusic && gameMusic.sound) {
-      try {
-        gameMusic.sound.setNumberOfLoops(-1); // Loop indefinitely
-        gameMusic.sound.setVolume(this.musicVolume * 0.8); // Slightly quieter during gameplay
-        gameMusic.sound.play((success: boolean) => {
-          if (success) {
-            this.currentMusic = gameMusic.sound;
-            console.log('🎵 Game music started');
-          }
-        });
-      } catch (error) {
-        console.error('Error starting game music:', error);
-      }
+
+  playMenuMusic() {
+    if (!this.isMuted && this.sounds.menumusic) {
+      this.sounds.menumusic.play();
     }
   }
-  
-  stopMusic() {
-    if (this.currentMusic) {
-      try {
-        this.currentMusic.stop();
-        this.currentMusic = null;
-        console.log('🎵 Music stopped');
-      } catch (error) {
-        console.error('Error stopping music:', error);
-      }
+
+  stopGameMusic() {
+    this.sounds.gamemusic?.stop();
+  }
+
+  stopMenuMusic() {
+    this.sounds.menumusic?.stop();
+  }
+
+  pauseGameMusic() {
+    this.sounds.gamemusic?.pause();
+  }
+
+  pauseMenuMusic() {
+    this.sounds.menumusic?.pause();
+  }
+
+  resumeGameMusic() {
+    if (!this.isMuted) {
+      this.sounds.gamemusic?.play();
     }
   }
-  
-  pauseMusic() {
-    if (this.currentMusic) {
-      try {
-        this.currentMusic.pause();
-        console.log('🎵 Music paused');
-      } catch (error) {
-        console.error('Error pausing music:', error);
-      }
+
+  resumeMenuMusic() {
+    if (!this.isMuted) {
+      this.sounds.menumusic?.play();
     }
   }
-  
-  resumeMusic() {
-    if (this.currentMusic) {
-      try {
-        this.currentMusic.play();
-        console.log('🎵 Music resumed');
-      } catch (error) {
-        console.error('Error resuming music:', error);
-      }
+
+  toggleMute() {
+    this.isMuted = !this.isMuted;
+    if (this.isMuted) {
+      this.stopGameMusic();
+      this.stopMenuMusic();
+    } else {
+      // Don't auto-resume music when unmuting - let the app decide when to play
     }
+    this.saveSettings();
   }
-  
-  // Volume controls
-  setSoundEffectsVolume(volume: number) {
-    this.soundEffectsVolume = Math.max(0, Math.min(1, volume));
-    
-    // Update all non-music sounds
-    for (const [key, soundEffect] of this.soundEffects.entries()) {
-      if (!key.includes('Music') && soundEffect.sound) {
-        soundEffect.sound.setVolume(this.soundEffectsVolume);
-        soundEffect.volume = this.soundEffectsVolume;
-      }
-    }
-  }
-  
+
   setMusicVolume(volume: number) {
     this.musicVolume = Math.max(0, Math.min(1, volume));
-    
-    // Update music sounds
-    for (const [key, soundEffect] of this.soundEffects.entries()) {
-      if (key.includes('Music') && soundEffect.sound) {
-        soundEffect.sound.setVolume(this.musicVolume);
-        soundEffect.volume = this.musicVolume;
-      }
-    }
-    
-    // Update current playing music
-    if (this.currentMusic) {
-      this.currentMusic.setVolume(this.musicVolume);
-    }
+    this.sounds.gamemusic?.setVolume(this.musicVolume);
+    this.sounds.menumusic?.setVolume(this.musicVolume);
+    this.saveSettings();
   }
-  
-  // Toggle sounds on/off
-  toggleSounds(enabled: boolean) {
-    this.soundsEnabled = enabled;
-    
-    if (!enabled) {
-      this.stopMusic();
-    }
-    
-    console.log(`🔊 Sounds ${enabled ? 'enabled' : 'disabled'}`);
+
+  setEffectsVolume(volume: number) {
+    this.effectsVolume = Math.max(0, Math.min(1, volume));
+    this.saveSettings();
   }
-  
-  toggleMusic(enabled: boolean) {
-    this.musicEnabled = enabled;
-    
-    if (!enabled) {
-      this.stopMusic();
-    }
-    
-    console.log(`🎵 Music ${enabled ? 'enabled' : 'disabled'}`);
+
+  stopAll() {
+    Object.values(this.sounds).forEach((sound) => {
+      sound?.stop();
+      sound?.release();
+    });
   }
-  
-  // Get current settings
-  getSoundSettings() {
+
+  getMuteStatus() {
+    return this.isMuted;
+  }
+
+  getVolumes() {
     return {
-      soundsEnabled: this.soundsEnabled,
-      musicEnabled: this.musicEnabled,
-      soundEffectsVolume: this.soundEffectsVolume,
-      musicVolume: this.musicVolume,
-      isInitialized: this.isInitialized
+      music: this.musicVolume,
+      effects: this.effectsVolume,
     };
-  }
-  
-  // Test sound (for settings screen)
-  testSound() {
-    this.playButtonPress();
-  }
-  
-  // Cleanup when app closes
-  cleanup() {
-    console.log('🧹 Cleaning up SoundService...');
-    
-    // Stop current music
-    this.stopMusic();
-    
-    // Release all sound resources
-    for (const [key, soundEffect] of this.soundEffects.entries()) {
-      if (soundEffect.sound) {
-        try {
-          soundEffect.sound.release();
-        } catch (error) {
-          console.error(`Error releasing sound ${key}:`, error);
-        }
-      }
-    }
-    
-    this.soundEffects.clear();
-    this.isInitialized = false;
   }
 }
 
-export default new SoundService();
+export const SoundService = new SoundServiceClass();

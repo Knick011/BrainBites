@@ -8,7 +8,7 @@ import {
   TextStyle,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import { SoundService } from '../../services/SoundService';
+import SoundService from '../../services/SoundService';
 
 interface BubbleButtonProps {
   title: string;
@@ -64,7 +64,7 @@ const BubbleButton: React.FC<BubbleButtonProps> = ({
 
   const handlePress = () => {
     if (!disabled) {
-      SoundService.playButtonClick();
+      SoundService.playButtonPress();
       onPress();
     }
   };

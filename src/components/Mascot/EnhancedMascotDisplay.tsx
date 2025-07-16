@@ -18,12 +18,12 @@ const { width, height } = Dimensions.get('window');
 
 // Map mascot types to image paths
 const MASCOT_IMAGES = {
-  happy: require('../../assets/images/mascot/happy.png'),
-  sad: require('../../assets/images/mascot/sad.png'),
-  excited: require('../../assets/images/mascot/excited.png'),
-  depressed: require('../../assets/images/mascot/depressed.png'),
-  gamemode: require('../../assets/images/mascot/gamemode.png'),
-  below: require('../../assets/images/mascot/below.png'),
+  happy: require('../../assets/mascot/happy.png'),
+  sad: require('../../assets/mascot/sad.png'),
+  excited: require('../../assets/mascot/excited.png'),
+  depressed: require('../../assets/mascot/depressed.png'),
+  gamemode: require('../../assets/mascot/gamemode.png'),
+  below: require('../../assets/mascot/below.png'),
 } as const;
 
 type MascotType = keyof typeof MASCOT_IMAGES;

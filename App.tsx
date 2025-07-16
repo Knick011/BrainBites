@@ -20,15 +20,15 @@ import SettingsScreen from './src/screens/SettingsScreen';
 
 // Services
 import { TimerService } from './src/services/TimerService';
-import { SoundService } from './src/services/SoundService';
+import SoundService from './src/services/SoundService';
 import { AnalyticsService } from './src/services/AnalyticsService';
 import { QuestionService } from './src/services/QuestionService';
 import { NotificationService } from './src/services/NotificationService';
 import { initializeFirebase } from './src/config/Firebase';
 
 // Components
-import Mascot from './src/components/Mascot/Mascot';
-import PersistentTimer from './src/components/Timer/PersistentTimer';
+// import Mascot from './src/components/Mascot/Mascot';
+// import PersistentTimer from './src/components/Timer/PersistentTimer';
 
 // Stores
 import { useUserStore } from './src/store/useUserStore';
@@ -89,7 +89,8 @@ const App = () => {
         
         console.log('🔊 Initializing SoundService...');
         try {
-          await SoundService.initialize();
+          // SoundService is auto-initialized in constructor
+          console.log('✓ SoundService initialized');
         } catch (error) {
           console.warn('⚠️ SoundService initialization failed, continuing without sound:', error);
           // Don't let sound errors crash the app
@@ -124,7 +125,7 @@ const App = () => {
           setInitialRoute('Home');
           console.log('🎵 Starting menu music...');
           try {
-            SoundService.playMenuMusic();
+            SoundService.startMenuMusic();
           } catch (error) {
             console.warn('⚠️ Failed to play menu music:', error);
           }
@@ -135,7 +136,7 @@ const App = () => {
         console.log('✅ BrainBites initialized successfully!');
         console.log('📦 Services status:');
         console.log('  - Questions:', QuestionService.isReady() ? 'Ready' : 'Limited');
-        console.log('  - Sound:', SoundService.isSoundEnabled() ? 'Enabled' : 'Disabled');
+        console.log('  - Sound:', SoundService.getSoundSettings().soundsEnabled ? 'Enabled' : 'Disabled');
         console.log('  - Notifications:', NotificationService.isEnabled() ? 'Enabled' : 'Disabled');
         
         // Small delay to show loading screen
@@ -159,7 +160,7 @@ const App = () => {
       console.log('🧹 Cleaning up app...');
       try {
         TimerService.cleanup();
-        SoundService.stopAll();
+        SoundService.stopMusic();
         NotificationService.cleanup();
       } catch (error) {
         console.error('Error during cleanup:', error);
@@ -189,27 +190,27 @@ const App = () => {
           colors: {
             primary: theme.colors.primary,
             background: theme.colors.background,
-            card: theme.colors.card,
+            card: theme.colors.cardBackground,
             text: theme.colors.textDark,
-            border: theme.colors.gray[200],
+            border: theme.colors.textMuted,
             notification: theme.colors.error,
           },
           dark: false,
           fonts: {
             regular: {
-              fontFamily: theme.typography.fontFamily.regular,
+              fontFamily: theme.fonts.primary,
               fontWeight: 'normal',
             },
             medium: {
-              fontFamily: theme.typography.fontFamily.bold,
+              fontFamily: theme.fonts.primary,
               fontWeight: 'normal',
             },
             bold: {
-              fontFamily: theme.typography.fontFamily.bold,
+              fontFamily: theme.fonts.bold,
               fontWeight: 'normal',
             },
             heavy: {
-              fontFamily: theme.typography.fontFamily.bold,
+              fontFamily: theme.fonts.bold,
               fontWeight: 'normal',
             },
           },
@@ -263,7 +264,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 20,
-    fontFamily: theme.fonts.primaryBold,
+    fontFamily: theme.fonts.bold,
     color: theme.colors.primary,
     marginTop: 20,
     textAlign: 'center',
@@ -271,7 +272,7 @@ const styles = StyleSheet.create({
   loadingSubtext: {
     fontSize: 16,
     fontFamily: theme.fonts.primary,
-    color: theme.colors.textSecondary,
+    color: theme.colors.textMuted,
     marginTop: 8,
     textAlign: 'center',
   },

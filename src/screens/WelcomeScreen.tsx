@@ -17,9 +17,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../App';
-import { SoundService } from '../services/SoundService';
-import EnhancedMascotDisplay, { MascotType } from '../components/mascot/EnhancedMascotDisplay';
+import SoundService from '../services/SoundService';
+import EnhancedMascotDisplay from '../components/Mascot/EnhancedMascotDisplay';
 import theme from '../styles/theme';
+
+// Define MascotType locally since it's not exported from the component
+type MascotType = 'happy' | 'sad' | 'excited' | 'depressed' | 'gamemode' | 'below';
 
 const { width, height } = Dimensions.get('window');
 

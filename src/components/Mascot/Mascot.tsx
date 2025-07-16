@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Easing } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SoundService } from '../../services/SoundService';
+import SoundService from '../../services/SoundService';
 import { useQuizStore } from '../../store/useQuizStore';
 import { useUserStore } from '../../store/useUserStore';
 import { useTimerStore } from '../../store/useTimerStore';
@@ -339,7 +339,7 @@ const Mascot: React.FC<MascotProps> = ({
       onPeekingPress();
     } else {
       // Default behavior - show stats or greeting
-      SoundService.playButtonClick();
+      SoundService.playButtonPress();
       
       if (!showDialogue) {
         const stats = {

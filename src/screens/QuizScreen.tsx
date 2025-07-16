@@ -18,10 +18,13 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../../App';
-import { SoundService } from '../services/SoundService';
-import { EnhancedScoreService } from '../services/EnhancedScoreService';
-import { EnhancedTimerService } from '../services/EnhancedTimerService';
-import EnhancedMascotDisplay, { MascotType } from '../components/mascot/EnhancedMascotDisplay';
+import SoundService from '../services/SoundService';
+import EnhancedScoreService from '../services/EnhancedScoreService';
+import EnhancedTimerService from '../services/EnhancedTimerService';
+import EnhancedMascotDisplay from '../components/Mascot/EnhancedMascotDisplay';
+
+// Define MascotType locally since it's not exported from the component
+type MascotType = 'happy' | 'sad' | 'excited' | 'depressed' | 'gamemode' | 'below';
 import theme from '../styles/theme';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
