@@ -66,10 +66,9 @@ class SoundServiceClass {
       const settings = await AsyncStorage.getItem(this.SETTINGS_KEY);
       if (settings) {
         const parsed = JSON.parse(settings);
-        this.isMuted = parsed.isMuted || false;
+        this.soundEnabled = parsed.soundEnabled !== undefined ? parsed.soundEnabled : true;
         this.musicVolume = parsed.musicVolume || 0.3;
         this.effectsVolume = parsed.effectsVolume || 0.6;
-        this.soundEnabled = parsed.soundEnabled || true;
       }
     } catch (error) {
       console.error('Failed to load sound settings:', error);
@@ -81,10 +80,9 @@ class SoundServiceClass {
       await AsyncStorage.setItem(
         this.SETTINGS_KEY,
         JSON.stringify({
-          isMuted: this.isMuted,
+          soundEnabled: this.soundEnabled,
           musicVolume: this.musicVolume,
           effectsVolume: this.effectsVolume,
-          soundEnabled: this.soundEnabled,
         })
       );
     } catch (error) {
@@ -93,7 +91,7 @@ class SoundServiceClass {
   }
 
   playSound(soundName: keyof SoundEffects, callback?: () => void) {
-    if (this.isMuted) {
+    if (!this.soundEnabled) {
       callback?.();
       return;
     }
@@ -181,20 +179,20 @@ class SoundServiceClass {
   }
 
   resumeGameMusic() {
-    if (!this.isMuted) {
+    if (this.soundEnabled) {
       this.sounds.gamemusic?.play();
     }
   }
 
   resumeMenuMusic() {
-    if (!this.isMuted) {
+    if (this.soundEnabled) {
       this.sounds.menumusic?.play();
     }
   }
 
   toggleMute() {
-    this.isMuted = !this.isMuted;
-    if (this.isMuted) {
+    this.soundEnabled = !this.soundEnabled;
+    if (!this.soundEnabled) {
       this.stopGameMusic();
       this.stopMenuMusic();
     } else {

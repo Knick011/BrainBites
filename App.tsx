@@ -57,17 +57,34 @@ const App = () => {
 
   useEffect(() => {
     const init = async () => {
+      console.log('Starting app initialization...');
+      
       // Initialize services
+      console.log('Initializing TimerService...');
       await TimerService.initialize();
+      console.log('TimerService initialized');
+      
+      console.log('Initializing SoundService...');
       await SoundService.initialize();
+      console.log('SoundService initialized');
+      
+      console.log('Initializing AnalyticsService...');
       await AnalyticsService.initialize();
+      console.log('AnalyticsService initialized');
+      
+      console.log('Loading questions...');
       await QuestionService.loadQuestions();
+      console.log('Questions loaded');
       
       // Load user data
+      console.log('Initializing user data...');
       await initializeApp();
+      console.log('User data initialized');
       
       // Play menu music
+      console.log('Playing menu music...');
       SoundService.playMenuMusic();
+      console.log('Menu music started');
       
       console.log('BrainBites app initialized successfully!');
       console.log('Assets loaded:', {
@@ -79,6 +96,7 @@ const App = () => {
     init();
 
     return () => {
+      console.log('Cleaning up app...');
       TimerService.cleanup();
       SoundService.stopAll();
     };
