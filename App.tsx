@@ -5,17 +5,6 @@ import { StatusBar, LogBox, View, Text, ActivityIndicator, StyleSheet } from 're
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { enableScreens } from 'react-native-screens';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import firebase from '@react-native-firebase/app';
-
-// Initialize Firebase if not already initialized
-if (!firebase.apps.length) {
-  try {
-    // Firebase will auto-initialize with google-services.json
-    firebase.app();
-  } catch (error) {
-    console.log('Firebase initialization error:', error);
-  }
-}
 
 // Styles
 import theme from './src/styles/theme';
@@ -35,6 +24,7 @@ import { SoundService } from './src/services/SoundService';
 import { AnalyticsService } from './src/services/AnalyticsService';
 import { QuestionService } from './src/services/QuestionService';
 import { NotificationService } from './src/services/NotificationService';
+import { initializeFirebase } from './src/config/Firebase';
 
 // Components
 import Mascot from './src/components/Mascot/Mascot';
@@ -62,6 +52,8 @@ LogBox.ignoreLogs([
   'new NativeEventEmitter() was called with a non-null argument without the required `removeListeners` method.',
   'Non-serializable values were found in the navigation state',
   'Remote debugger is in a background tab',
+  'This method is deprecated',
+  'Firebase initialization error',
 ]);
 
 const LoadingScreen: React.FC = () => (
@@ -103,8 +95,23 @@ const App = () => {
           // Don't let sound errors crash the app
         }
         
+        console.log('🔥 Initializing Firebase...');
+        try {
+          const firebaseInitialized = await initializeFirebase();
+          if (!firebaseInitialized) {
+            console.warn('⚠️ Firebase initialization failed, continuing without Firebase');
+          }
+        } catch (error) {
+          console.warn('⚠️ Firebase initialization failed, continuing without Firebase:', error);
+        }
+        
         console.log('📊 Initializing AnalyticsService...');
-        await AnalyticsService.initialize();
+        try {
+          await AnalyticsService.initialize();
+        } catch (error) {
+          console.warn('⚠️ AnalyticsService initialization failed, continuing without analytics:', error);
+          // Don't let analytics errors crash the app
+        }
         
         console.log('🔔 Initializing NotificationService...');
         await NotificationService.initialize();
@@ -194,16 +201,16 @@ const App = () => {
               fontWeight: 'normal',
             },
             medium: {
-              fontFamily: theme.typography.fontFamily.medium,
-              fontWeight: '500',
+              fontFamily: theme.typography.fontFamily.bold,
+              fontWeight: 'normal',
             },
             bold: {
               fontFamily: theme.typography.fontFamily.bold,
-              fontWeight: 'bold',
+              fontWeight: 'normal',
             },
             heavy: {
-              fontFamily: theme.typography.fontFamily.black,
-              fontWeight: '900',
+              fontFamily: theme.typography.fontFamily.bold,
+              fontWeight: 'normal',
             },
           },
         }}
@@ -211,62 +218,36 @@ const App = () => {
           console.log('🧭 Navigation ready');
         }}
       >
-        <Stack.Navigator
+        <Stack.Navigator 
           initialRouteName={initialRoute}
           screenOptions={{
             headerShown: false,
-            cardStyleInterpolator: ({ current: { progress } }) => ({
-              cardStyle: {
-                opacity: progress,
-              },
-            }),
-            cardStyle: {
-              backgroundColor: theme.colors.background,
-            },
             gestureEnabled: true,
-          }}
-        >
-          <Stack.Screen 
-            name="Welcome" 
-            component={WelcomeScreen}
-            options={{
-              animationTypeForReplace: 'push',
-            }}
-          />
-          <Stack.Screen 
-            name="Home" 
-            component={HomeScreen}
-            options={{
-              gestureEnabled: false, // Prevent swipe back to Welcome
-            }}
-          />
-          <Stack.Screen 
-            name="Quiz" 
-            component={QuizScreen}
-            options={{
-              cardStyleInterpolator: ({ current: { progress } }) => ({
+            gestureDirection: 'horizontal',
+            cardStyleInterpolator: ({ current, layouts }) => {
+              return {
                 cardStyle: {
                   transform: [
                     {
-                      translateX: progress.interpolate({
+                      translateX: current.progress.interpolate({
                         inputRange: [0, 1],
-                        outputRange: [300, 0],
+                        outputRange: [layouts.screen.width, 0],
                       }),
                     },
                   ],
                 },
-              }),
-            }}
-          />
+              };
+            },
+          }}
+        >
+          <Stack.Screen name="Welcome" component={WelcomeScreen} />
+          <Stack.Screen name="Home" component={HomeScreen} />
+          <Stack.Screen name="Quiz" component={QuizScreen} />
           <Stack.Screen name="Categories" component={CategoriesScreen} />
           <Stack.Screen name="DailyGoals" component={DailyGoalsScreen} />
           <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
         </Stack.Navigator>
-        
-        {/* Global Components */}
-        <Mascot />
-        <PersistentTimer />
       </NavigationContainer>
     </SafeAreaProvider>
   );
@@ -282,18 +263,17 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: theme.colors.textDark,
+    fontFamily: theme.fonts.primaryBold,
+    color: theme.colors.primary,
     marginTop: 20,
     textAlign: 'center',
-    fontFamily: theme.typography.fontFamily.bold,
   },
   loadingSubtext: {
-    fontSize: 14,
-    color: theme.colors.textMuted,
+    fontSize: 16,
+    fontFamily: theme.fonts.primary,
+    color: theme.colors.textSecondary,
     marginTop: 8,
     textAlign: 'center',
-    fontFamily: theme.typography.fontFamily.regular,
   },
 });
 

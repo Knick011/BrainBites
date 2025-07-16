@@ -22,34 +22,13 @@ import { AnalyticsService } from '../services/AnalyticsService';
 import { useQuizStore } from '../store/useQuizStore';
 import { useUserStore } from '../store/useUserStore';
 import { useTimerStore } from '../store/useTimerStore';
-import Mascot from '../components/Mascot/Mascot';
-import { QuizQuestion, QuizOptions, StreakIndicator } from '../components/Quiz';
+import EnhancedMascotDisplay from '../components/mascot/EnhancedMascotDisplay';
 import theme from '../styles/theme';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Quiz'>;
 type QuizRouteProp = RouteProp<RootStackParamList, 'Quiz'>;
-
-interface TimerDisplayProps {
-  timeRemaining: number;
-}
-
-const TimerDisplay: React.FC<TimerDisplayProps> = ({ timeRemaining }) => {
-  const formatTime = (seconds: number) => {
-    const minutes = Math.floor(Math.abs(seconds) / 60);
-    const remainingSeconds = Math.abs(seconds) % 60;
-    const sign = seconds < 0 ? '-' : '';
-    return `${sign}${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-  };
-
-  return (
-    <View style={styles.timerContainer}>
-      <Icon name="time-outline" size={20} color="#FFF" />
-      <Text style={styles.timerText}>{formatTime(timeRemaining)}</Text>
-    </View>
-  );
-};
 
 const QuizScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
@@ -67,7 +46,7 @@ const QuizScreen: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [mascotMessage, setMascotMessage] = useState<string | null>(null);
-  const [mascotType, setMascotType] = useState<'happy' | 'sad' | 'excited' | 'depressed' | 'gamemode' | 'peeking'>('gamemode');
+  const [mascotType, setMascotType] = useState<'happy' | 'sad' | 'excited' | 'depressed' | 'gamemode' | 'below'>('gamemode');
 
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -153,20 +132,20 @@ const QuizScreen: React.FC = () => {
     }
   };
 
-  const handleAnswerSelect = (answer: string) => {
+  const handleAnswerSelect = (selectedOption: string) => {
     if (selectedAnswer || showResult) return;
 
     SoundService.playButtonClick();
-    setSelectedAnswer(answer);
+    setSelectedAnswer(selectedOption);
     
-    // Check if answer is correct
-    const correct = answer === currentQuestion?.correctAnswer;
+    // FIXED: Compare with the correct answer letter, not the option text
+    const correct = selectedOption === currentQuestion?.correctAnswer;
     setIsCorrect(correct);
     
     const responseTime = Date.now() - questionStartTime;
     
     console.log('Answer check:', {
-      selected: answer,
+      selected: selectedOption,
       correct: currentQuestion?.correctAnswer,
       isCorrect: correct
     });
@@ -189,6 +168,10 @@ const QuizScreen: React.FC = () => {
       
       // Update user stats
       userStore.incrementScore(10);
+      userStore.recordAnswer(true, category || 'mixed', difficulty);
+      
+      // Update streak
+      quizStore.incrementStreak();
       
       // Add time reward (30 seconds for correct answer)
       timerStore.addTime(30);
@@ -203,6 +186,12 @@ const QuizScreen: React.FC = () => {
     } else {
       // Play failure sound
       SoundService.playIncorrect();
+      
+      // Update user stats
+      userStore.recordAnswer(false, category || 'mixed', difficulty);
+      
+      // Reset streak
+      quizStore.resetStreak();
       
       // Show sad mascot
       setMascotType('sad');
@@ -267,7 +256,7 @@ const QuizScreen: React.FC = () => {
       difficulty,
       score: userStore.stats.totalScore,
       questionsAnswered: quizStore.questionsAnswered,
-      correctAnswers: quizStore.currentStreak, // Use streak as correct answers for now
+      correctAnswers: userStore.stats.correctAnswers,
       duration: Date.now() - questionStartTime,
       streak: quizStore.currentStreak,
     });
@@ -304,6 +293,55 @@ const QuizScreen: React.FC = () => {
       setMascotMessage("Take your time and think carefully about each option!");
       AnalyticsService.logMascotInteraction('hint_request', 'quiz_no_answer');
     }
+  };
+
+  const getOptionStyle = (optionKey: string) => {
+    const baseStyle = [styles.optionButton];
+    
+    if (selectedAnswer === optionKey) {
+      if (showResult) {
+        if (isCorrect) {
+          baseStyle.push(styles.correctOption);
+        } else {
+          baseStyle.push(styles.incorrectOption);
+        }
+      } else {
+        baseStyle.push(styles.selectedOption);
+      }
+    } else if (showResult && optionKey === currentQuestion?.correctAnswer) {
+      baseStyle.push(styles.correctOption);
+    }
+    
+    return baseStyle;
+  };
+
+  const renderOptions = () => {
+    if (!currentQuestion) return null;
+    
+    const options = [
+      currentQuestion.optionA,
+      currentQuestion.optionB,
+      currentQuestion.optionC,
+      currentQuestion.optionD,
+    ];
+    
+    return options.map((option, index) => (
+      <TouchableOpacity
+        key={index}
+        style={getOptionStyle(option)}
+        onPress={() => handleAnswerSelect(option)}
+        disabled={showResult}
+        activeOpacity={0.7}
+      >
+        <View style={styles.optionContent}>
+          <View style={styles.optionLabel}>
+            <Text style={styles.optionLabelText}>{['A', 'B', 'C', 'D'][index]}</Text>
+          </View>
+          <Text style={styles.optionText}>{option}</Text>
+          <Icon name="chevron-forward" size={20} color="#666" />
+        </View>
+      </TouchableOpacity>
+    ));
   };
 
   if (isLoading) {
@@ -345,7 +383,10 @@ const QuizScreen: React.FC = () => {
               <View style={styles.progressBar}>
                 <View style={[styles.progressFill, { width: '70%' }]} />
               </View>
-              <TimerDisplay timeRemaining={timerStore.timeRemaining} />
+              <View style={styles.timerContainer}>
+                <Icon name="clock" size={16} color="#FFF" style={styles.timerIcon} />
+                <Text style={styles.timerText}>5:00</Text>
+              </View>
             </View>
           </View>
           
@@ -365,41 +406,17 @@ const QuizScreen: React.FC = () => {
             },
           ]}
         >
-          <QuizQuestion 
-            question={currentQuestion} 
-            questionNumber={quizStore.questionsAnswered + 1} 
-          />
+          <View style={styles.questionCard}>
+            <Text style={styles.questionText}>
+              {currentQuestion?.question}
+            </Text>
+          </View>
           
-          <QuizOptions
-            options={[
-              currentQuestion?.optionA || '',
-              currentQuestion?.optionB || '',
-              currentQuestion?.optionC || '',
-              currentQuestion?.optionD || '',
-            ]}
-            selectedAnswer={selectedAnswer}
-            correctAnswer={currentQuestion?.correctAnswer || ''}
-            showResult={showResult}
-            onSelectAnswer={handleAnswerSelect}
-          />
+          {/* Options */}
+          <View style={styles.optionsContainer}>
+            {renderOptions()}
+          </View>
         </Animated.View>
-        
-        {/* Mascot */}
-        <Mascot
-          type={mascotType}
-          position="left"
-          showMascot={!!mascotMessage}
-          message={mascotMessage}
-          autoHide={true}
-          autoHideDuration={5000}
-          onDismiss={() => setMascotMessage(null)}
-          fullScreen={true}
-          isQuizScreen={true}
-          currentQuestion={currentQuestion}
-          selectedAnswer={selectedAnswer}
-          isCorrect={isCorrect}
-          onPeekingPress={handleMascotPress}
-        />
       </SafeAreaView>
     </LinearGradient>
   );
@@ -458,28 +475,28 @@ const styles = StyleSheet.create({
   progressContainer: {
     width: '100%',
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
   progressBar: {
-    width: '100%',
+    width: '70%',
     height: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderRadius: 4,
-    marginBottom: 8,
+    marginRight: 10,
   },
   progressFill: {
     height: '100%',
     backgroundColor: '#4CAF50',
     borderRadius: 4,
   },
-  timerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  timerIcon: {
+    marginRight: 5,
   },
   timerText: {
     color: '#FFF',
     fontSize: 14,
     fontFamily: 'Nunito-Bold',
-    marginLeft: 5,
   },
   scoreContainer: {
     flexDirection: 'row',

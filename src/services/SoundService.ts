@@ -2,7 +2,7 @@ import Sound from 'react-native-sound';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Enable playback in background/silent mode
-Sound.setCategory('Playback');
+Sound.setCategory('Playback', true);
 
 interface SoundEffects {
   correct: Sound | null;

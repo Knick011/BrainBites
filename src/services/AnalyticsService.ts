@@ -4,11 +4,19 @@ import { Platform } from 'react-native';
 let analytics: any = null;
 let firebaseApp: any = null;
 
+// Try to get Firebase instances from the centralized Firebase config
 try {
-  analytics = require('@react-native-firebase/analytics').default;
-  firebaseApp = require('@react-native-firebase/app').default;
+  const { firebaseApp: centralFirebaseApp, analytics: centralAnalytics } = require('../config/Firebase');
+  firebaseApp = centralFirebaseApp;
+  analytics = centralAnalytics;
 } catch (error) {
-  console.log('Firebase modules not available:', error);
+  console.log('Centralized Firebase not available, trying direct import:', error);
+  try {
+    analytics = require('@react-native-firebase/analytics').default;
+    firebaseApp = require('@react-native-firebase/app').default;
+  } catch (directError) {
+    console.log('Firebase modules not available:', directError);
+  }
 }
 
 interface UserProperties {
@@ -41,24 +49,17 @@ class AnalyticsServiceClass {
         return;
       }
 
-      // Check if Firebase app is properly initialized
+      // Test Firebase Analytics
       try {
-        const apps = firebaseApp.apps;
-        if (apps.length === 0) {
-          console.log('⚠️ Firebase Analytics not available:', 'No Firebase App [DEFAULT] has been created - call firebase.initializeApp()');
-          this.firebaseAvailable = false;
-        } else {
-          // Test Firebase Analytics
-          await analytics().setAnalyticsCollectionEnabled(true);
-          this.firebaseAvailable = true;
-          console.log('✅ Firebase Analytics is available');
-          
-          // Set default user properties
-          await this.setUserProperties({
-            platform: Platform.OS,
-            app_version: '1.0.0',
-          });
-        }
+        await analytics().setAnalyticsCollectionEnabled(true);
+        this.firebaseAvailable = true;
+        console.log('✅ Firebase Analytics is available');
+        
+        // Set default user properties
+        await this.setUserProperties({
+          platform: Platform.OS,
+          app_version: '1.0.0',
+        });
       } catch (firebaseError) {
         console.log('⚠️ Firebase Analytics not available:', firebaseError);
         this.firebaseAvailable = false;

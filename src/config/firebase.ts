@@ -1,4 +1,4 @@
-// src/config/firebase.ts
+// src/config/Firebase.ts
 import { Platform } from 'react-native';
 
 let firebaseApp: any = null;
@@ -8,22 +8,25 @@ let crashlytics: any = null;
 // Initialize Firebase with proper error handling
 export const initializeFirebase = async () => {
   try {
+    console.log('🔥 Initializing Firebase...');
+    
     // Import Firebase modules
     const { default: firebase } = await import('@react-native-firebase/app');
     
     // Check if Firebase is already initialized
     if (firebase.apps.length === 0) {
-      // Firebase should auto-initialize with google-services.json/GoogleService-Info.plist
-      // If not, you can manually initialize here
-      console.log('🔥 Firebase auto-initializing...');
+      console.log('⚠️ No Firebase apps found - this might indicate a configuration issue');
+      return false;
     }
     
     firebaseApp = firebase.app();
+    console.log('✅ Firebase app initialized');
     
     // Initialize Analytics
     try {
       const analyticsModule = await import('@react-native-firebase/analytics');
       analytics = analyticsModule.default();
+      await analytics.setAnalyticsCollectionEnabled(true);
       console.log('📊 Firebase Analytics initialized');
     } catch (error) {
       console.log('⚠️ Firebase Analytics not available:', error);
