@@ -1,457 +1,274 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
-  SafeAreaView,
+  TouchableOpacity,
   RefreshControl,
-  Animated,
-  Platform
+  ActivityIndicator,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import LinearGradient from 'react-native-linear-gradient';
+import Icon from 'react-native-vector-icons/Ionicons';
+
+import theme from '../styles/theme';
 import { useUserStore } from '../store/useUserStore';
-import { SoundService } from '../services/SoundService';
-
-// Funny capybara-themed player names
-const FAKE_NAMES = [
-  'CapyBOSSa', 'CapyBALLER', 'HappyBara', 'CapyGOATa', 'CapyBrainiac',
-  'CapyCrusher', 'BaraKing', 'CapyChampion', 'RodentRoyalty', 'CapyGenius',
-  'AquaticAce', 'CapyMaster', 'SwimmingScholar', 'CapyPro2024', 'BaraBoss',
-  'CapyBaller', 'ChillBara', 'CapyDominant', 'SplashyBara', 'CapyElite',
-  'BaraGOD', 'CapyLegend', 'WaterPigWins', 'CapyStrong', 'BaraBeats',
-  'CapyClever', 'SmartBara', 'CapyQuizKing', 'BaraBrains', 'CapySharp',
-  'RodentRuler', 'CapySwift', 'BaraBlitz', 'CapyQuick', 'FastBara',
-  'CapyNinja', 'StealthyBara', 'CapyWarrior', 'BaraBattle', 'CapyVictor',
-  'WinningBara', 'CapyChamp', 'BaraBest', 'CapySupreme', 'EliteBara',
-  'CapyWizard', 'MagicBara', 'CapySage', 'WiseBara', 'CapyOracle',
-  'BaraBarista', 'CoffeeCapy', 'SleepyBara', 'NightCapy', 'CapyDreamer',
-  'ZenBara', 'ChillCapybara', 'RelaxedRodent', 'CalmCapy', 'PeacefulBara',
-  'StudyBara', 'BookishCapy', 'NerdyBara', 'CapyScholar', 'AcademicBara'
-];
-
-// Calculate score for hours of play
-// Assuming average of 10 seconds per question, 100 points per correct answer
-// 4 hours = 14,400 seconds = 1,440 questions = 144,000 base points
-// With streaks and bonuses, could be ~200,000-300,000 points
-const TOP_PLAYER_DAILY_SCORE = 120000;
-
-// Generate top 10 ultra-competitive scores
-const generateTop10DailyScores = () => {
-  const scores = [];
-  let currentScore = TOP_PLAYER_DAILY_SCORE;
-  
-  // Top 10 players have very high scores, close competition
-  for (let i = 0; i < 10; i++) {
-    const dropPercentage = 0.92 + (Math.random() * 0.06); // 92-98% of previous
-    currentScore = Math.floor(currentScore * dropPercentage);
-    
-    scores.push({
-      id: `top_${i}`,
-      rank: i + 1,
-      displayName: FAKE_NAMES[i],
-      score: currentScore,
-      highestStreak: Math.floor(Math.random() * 20) + 10, // 10-30 streak
-      isCurrentUser: false,
-      lastActive: i < 3 ? 'Online now' : `${Math.floor(Math.random() * 59) + 1}m ago`,
-    });
-  }
-  
-  return scores;
-};
-
-// Calculate user's actual rank based on score
-const calculateUserRank = (userScore: number) => {
-  // Rough calculation: every 100 points difference = ~3 ranks
-  // This creates a realistic distribution
-  const scoreDifference = TOP_PLAYER_DAILY_SCORE - userScore;
-  const estimatedRank = Math.floor(scoreDifference / 100) * 3 + 11;
-  
-  // Add some randomness
-  const variance = Math.floor(Math.random() * 20) - 10;
-  
-  return Math.max(11, estimatedRank + variance);
-};
-
-// Generate players around user's rank
-const generateAroundUserScores = (userScore: number, userRank: number) => {
-  const scores = [];
-  // Generate 2 players above and 2 below the user
-  for (let i = -2; i <= 2; i++) {
-    if (i === 0) continue; // Skip user's position
-    let rank = userRank + i;
-    if (isNaN(rank)) rank = 1000 + i; // fallback for NaN
-    const scoreDiff = i * (50 + Math.random() * 50); // 50-100 points difference per rank
-    const score = Math.max(100, Math.floor(userScore - scoreDiff));
-    scores.push({
-      id: `around_${rank}_${i}`, // ensure unique key
-      rank: rank,
-      displayName: FAKE_NAMES[(rank + 10) % FAKE_NAMES.length],
-      score: score,
-      highestStreak: Math.floor(Math.random() * 40) + 10,
-      isCurrentUser: false,
-      lastActive: `${Math.floor(Math.random() * 23) + 1}h ago`,
-    });
-  }
-  return scores;
-};
+import { logEvent } from '../config/Firebase';
+import SoundService from '../services/SoundService';
 
 interface LeaderboardEntry {
-  id: string;
   rank: number;
-  displayName: string;
+  username: string;
   score: number;
-  highestStreak: number;
-  isCurrentUser: boolean;
-  lastActive: string;
-  isSeparator?: boolean;
+  streak: number;
+  avatar: string;
+  isCurrentUser?: boolean;
 }
+
+// Mock data - In production, this would come from a backend
+const mockLeaderboard: LeaderboardEntry[] = [
+  { rank: 1, username: 'QuizMaster', score: 2450, streak: 25, avatar: '🦁' },
+  { rank: 2, username: 'Brainiac', score: 2320, streak: 18, avatar: '🧠' },
+  { rank: 3, username: 'SmartCookie', score: 2180, streak: 22, avatar: '🍪' },
+  { rank: 4, username: 'Einstein Jr', score: 1950, streak: 15, avatar: '👨‍🔬' },
+  { rank: 5, username: 'QuizWhiz', score: 1820, streak: 12, avatar: '⚡' },
+  { rank: 6, username: 'Genius', score: 1650, streak: 10, avatar: '💡' },
+  { rank: 7, username: 'Scholar', score: 1500, streak: 8, avatar: '📚' },
+  { rank: 8, username: 'Thinker', score: 1350, streak: 7, avatar: '🤔' },
+  { rank: 9, username: 'Learner', score: 1200, streak: 5, avatar: '🎓' },
+  { rank: 10, username: 'Student', score: 1050, streak: 3, avatar: '✏️' },
+];
 
 const LeaderboardScreen: React.FC = () => {
   const navigation = useNavigation();
-  const { username, stats, flowStreak } = useUserStore();
-  const [activeTab, setActiveTab] = useState<'global' | 'friends'>('global');
-  const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>([]);
+  const { username, score, maxStreak } = useUserStore();
+  
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [userRank, setUserRank] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [currentUserDailyScore, setCurrentUserDailyScore] = useState(0);
-  
-  // Animation values
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  
+  const [timeFilter, setTimeFilter] = useState<'daily' | 'weekly' | 'allTime'>('allTime');
+
   useEffect(() => {
-    loadUserScore();
+    loadLeaderboard();
+    logEvent('leaderboard_viewed');
+  }, [timeFilter]);
+
+  const loadLeaderboard = async () => {
+    setIsLoading(true);
     
-    // Animate entrance
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        useNativeDriver: true,
-      }),
-    ]).start();
-    
-    // Pulse animation for user's entry
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.05,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-  }, []);
-  
-  useEffect(() => {
-    loadLeaderboardData();
-  }, [activeTab, currentUserDailyScore]);
-  
-  const loadUserScore = async () => {
-    // Simulate loading user score from storage
-    setCurrentUserDailyScore(stats.totalScore || Math.floor(Math.random() * 5000) + 1000);
-  };
-  
-  const loadLeaderboardData = () => {
-    let fakeData: LeaderboardEntry[] = [];
-    let userPosition = 0;
-    
-    switch (activeTab) {
-      case 'global': {
-        const top10 = generateTop10DailyScores();
-        const userRank = calculateUserRank(currentUserDailyScore);
-        setUserRank(userRank);
-        if (currentUserDailyScore > top10[9].score) {
-          const insertIndex = top10.findIndex(p => p.score < currentUserDailyScore);
-          const userData: LeaderboardEntry = {
-            id: 'current_user',
-            rank: insertIndex + 1,
-            displayName: username || 'CaBBybara',
-            score: currentUserDailyScore,
-            highestStreak: flowStreak,
-            isCurrentUser: true,
-            lastActive: 'Online now',
-          };
-          top10.splice(insertIndex, 0, userData);
-          top10.pop();
-          top10.forEach((player, index) => {
-            player.rank = index + 1;
-          });
-          fakeData = top10;
-        } else {
-          fakeData = [...top10];
-        }
-        fakeData.push({ id: 'separator', rank: 0, displayName: '', score: 0, highestStreak: 0, isCurrentUser: false, lastActive: '', isSeparator: true });
-        const aroundUser = generateAroundUserScores(currentUserDailyScore, userRank);
-        fakeData = fakeData.concat(aroundUser);
-        const userData: LeaderboardEntry = {
-          id: 'current_user',
-          rank: userRank,
-          displayName: username || 'CaBBybara',
-          score: currentUserDailyScore,
-          highestStreak: flowStreak,
-          isCurrentUser: true,
-          lastActive: 'Online now',
-        };
-        const insertIndex = fakeData.findIndex(p => !p.isSeparator && p.rank > userRank);
-        if (insertIndex !== -1) {
-          fakeData.splice(insertIndex, 0, userData);
-        } else {
-          fakeData.push(userData);
-        }
-        break;
+    // Simulate API call
+    setTimeout(() => {
+      // Insert current user into leaderboard
+      const userEntry: LeaderboardEntry = {
+        rank: 0,
+        username: username,
+        score: score,
+        streak: maxStreak,
+        avatar: '🦫',
+        isCurrentUser: true,
+      };
+      
+      // Find user's rank
+      const allEntries = [...mockLeaderboard, userEntry].sort((a, b) => b.score - a.score);
+      const userIndex = allEntries.findIndex(entry => entry.isCurrentUser);
+      
+      if (userIndex !== -1) {
+        allEntries[userIndex].rank = userIndex + 1;
+        setUserRank(userIndex + 1);
       }
-      case 'friends': {
-        const friendNames = [
-          'BestBaraBuddy', 'StudyCapy', 'CoffeeBara', 'GymCapybara', 'RoommateBara',
-          'WorkCapy', 'OldBaraFriend', 'NewCapyPal', 'CoolCapyCousin', 'SisterBara'
-        ];
-        const friendScores: LeaderboardEntry[] = friendNames.map((name, i) => {
-          const variance = (Math.random() - 0.5) * currentUserDailyScore * 0.4;
-          return {
-            id: `friend_${i}`,
-            rank: 0,
-            displayName: name,
-            score: Math.max(100, Math.floor(currentUserDailyScore + variance)),
-            highestStreak: Math.floor(Math.random() * 20) + 10,
-            isCurrentUser: false,
-            lastActive: i < 3 ? 'Online now' : `${Math.floor(Math.random() * 23) + 1}h ago`,
-          };
-        });
-        friendScores.push({
-          id: 'current_user',
-          rank: 0,
-          displayName: username || 'CaBBybara',
-          score: currentUserDailyScore,
-          highestStreak: flowStreak,
-          isCurrentUser: true,
-          lastActive: 'Online now',
-        });
-        friendScores.sort((a, b) => b.score - a.score);
-        friendScores.forEach((friend, index) => {
-          friend.rank = index + 1;
-        });
-        fakeData = friendScores;
-        const userFriendRank = friendScores.findIndex(f => f.isCurrentUser) + 1;
-        setUserRank(userFriendRank);
-        break;
-      }
-    }
-    setLeaderboardData(fakeData);
+      
+      // Update ranks
+      const rankedEntries = allEntries.map((entry, index) => ({
+        ...entry,
+        rank: index + 1,
+      }));
+      
+      setLeaderboard(rankedEntries.slice(0, 100)); // Top 100
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }, 1000);
   };
-  
-  const handleRefresh = async () => {
+
+  const handleRefresh = () => {
     setIsRefreshing(true);
-    SoundService.playButtonClick();
-    
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Slightly randomize scores to show "live" updates
-    loadLeaderboardData();
-    setIsRefreshing(false);
+    loadLeaderboard();
   };
-  
-  const handleTabChange = (tab: 'global' | 'friends') => {
-    SoundService.playButtonClick();
-    setActiveTab(tab);
-  };
-  
-  const renderLeaderboardItem = (item: LeaderboardEntry, index: number) => {
-    if (item.isSeparator) {
-      return (
-        <View key={item.id} style={styles.separator}>
-          <View style={styles.separatorLine} />
-          <View style={styles.separatorTextContainer}>
-            <Icon name="dots-vertical" size={20} color="#999" />
-            <Text style={styles.separatorText}>
-              {activeTab === 'global' ? 'Many capybaras later...' : 'More capybaras...'}
-            </Text>
-            <Icon name="dots-vertical" size={20} color="#999" />
-          </View>
-          <View style={styles.separatorLine} />
-        </View>
-      );
+
+  const getRankIcon = (rank: number) => {
+    switch (rank) {
+      case 1:
+        return '🥇';
+      case 2:
+        return '🥈';
+      case 3:
+        return '🥉';
+      default:
+        return null;
     }
+  };
+
+  const getRankColor = (rank: number) => {
+    switch (rank) {
+      case 1:
+        return '#FFD700';
+      case 2:
+        return '#C0C0C0';
+      case 3:
+        return '#CD7F32';
+      default:
+        return theme.colors.textSecondary;
+    }
+  };
+
+  const renderHeader = () => (
+    <LinearGradient
+      colors={theme.colors.gradientPrimary}
+      style={styles.header}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+    >
+      <TouchableOpacity
+        onPress={() => navigation.goBack()}
+        style={styles.backButton}
+        activeOpacity={0.7}
+      >
+        <Icon name="arrow-back" size={24} color={theme.colors.textPrimary} />
+      </TouchableOpacity>
+      
+      <Text style={styles.headerTitle}>Leaderboard</Text>
+      <View style={styles.placeholder} />
+    </LinearGradient>
+  );
+
+  const renderTimeFilter = () => (
+    <View style={styles.filterContainer}>
+      {(['daily', 'weekly', 'allTime'] as const).map((filter) => (
+        <TouchableOpacity
+          key={filter}
+          style={[
+            styles.filterButton,
+            timeFilter === filter && styles.filterButtonActive,
+          ]}
+          onPress={() => {
+            setTimeFilter(filter);
+            SoundService.playButtonPress();
+          }}
+          activeOpacity={0.8}
+        >
+          <Text
+            style={[
+              styles.filterButtonText,
+              timeFilter === filter && styles.filterButtonTextActive,
+            ]}
+          >
+            {filter === 'allTime' ? 'All Time' : filter.charAt(0).toUpperCase() + filter.slice(1)}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
+  const renderUserCard = () => {
+    if (!userRank) return null;
     
-    const isTopThree = item.rank <= 3;
-    const medalColors = ['#FFD700', '#C0C0C0', '#CD7F32']; // Gold, Silver, Bronze
+    const userEntry = leaderboard.find(entry => entry.isCurrentUser);
+    if (!userEntry) return null;
     
     return (
-      <Animated.View
-        key={item.id}
+      <View style={styles.userCard}>
+        <View style={styles.userCardLeft}>
+          <Text style={styles.userAvatar}>{userEntry.avatar}</Text>
+          <View>
+            <Text style={styles.userCardName}>Your Ranking</Text>
+            <Text style={styles.userCardScore}>{userEntry.score} points</Text>
+          </View>
+        </View>
+        <View style={styles.userCardRight}>
+          <Text style={[styles.userCardRank, { color: getRankColor(userEntry.rank) }]}>
+            #{userEntry.rank}
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
+  const renderLeaderboardItem = (entry: LeaderboardEntry, index: number) => {
+    const isTopThree = entry.rank <= 3;
+    const rankIcon = getRankIcon(entry.rank);
+    
+    return (
+      <View
+        key={`${entry.username}-${index}`}
         style={[
           styles.leaderboardItem,
-          item.isCurrentUser && styles.currentUserItem,
-          {
-            opacity: fadeAnim,
-            transform: [
-              {
-                translateX: slideAnim.interpolate({
-                  inputRange: [0, 50],
-                  outputRange: [0, index * 2],
-                }),
-              },
-              item.isCurrentUser ? { scale: pulseAnim } : { scale: 1 },
-            ],
-          },
+          entry.isCurrentUser && styles.currentUserItem,
+          isTopThree && styles.topThreeItem,
         ]}
       >
         <View style={styles.rankContainer}>
-          {isTopThree ? (
-            <View style={[styles.medal, { backgroundColor: medalColors[item.rank - 1] }]}>
-              <Icon name="crown" size={16} color="white" />
-              <Text style={styles.medalText}>{item.rank}</Text>
-            </View>
+          {rankIcon ? (
+            <Text style={styles.rankIcon}>{rankIcon}</Text>
           ) : (
-            <Text style={[styles.rankText, item.isCurrentUser && styles.currentUserRank]}>
-              #{item.rank}
+            <Text style={[styles.rankText, { color: getRankColor(entry.rank) }]}>
+              {entry.rank}
             </Text>
           )}
         </View>
         
-        <View style={styles.playerInfo}>
-          <Text style={[styles.playerName, item.isCurrentUser && styles.currentUserName]}>
-            {item.displayName} {item.isCurrentUser && '(You)'}
-          </Text>
+        <Text style={styles.avatar}>{entry.avatar}</Text>
+        
+        <View style={styles.userInfo}>
+          <Text style={styles.username}>{entry.username}</Text>
           <View style={styles.statsRow}>
-            <Icon name="star" size={14} color="#FFD700" />
-            <Text style={styles.scoreText}>{(item.score ?? 0).toLocaleString()}</Text>
-            {item.highestStreak > 0 && (
-              <>
-                <Icon name="fire" size={14} color="#FF9F1C" style={{ marginLeft: 12 }} />
-                <Text style={styles.streakText}>{item.highestStreak}</Text>
-              </>
-            )}
-            {item.lastActive && activeTab === 'global' && (
-              <Text style={styles.lastActive}>{item.lastActive}</Text>
-            )}
+            <Icon name="star" size={12} color={theme.colors.warning} />
+            <Text style={styles.scoreText}>{entry.score}</Text>
+            <Icon name="flame" size={12} color={theme.colors.error} style={{ marginLeft: 10 }} />
+            <Text style={styles.streakText}>{entry.streak}</Text>
           </View>
         </View>
         
-        {item.isCurrentUser && (
-          <Icon name="chevron-right" size={24} color="#FF9F1C" />
+        {entry.isCurrentUser && (
+          <View style={styles.youBadge}>
+            <Text style={styles.youBadgeText}>YOU</Text>
+          </View>
         )}
-      </Animated.View>
+      </View>
     );
   };
-  
-  const renderUserCard = () => {
-    if (!userRank) return null;
-    
-    const totalPlayers = activeTab === 'friends' ? 11 : '47.3K';
-    
-    const percentile = activeTab === 'friends' ? 
-      Math.round(((11 - userRank) / 10) * 100) :
-      Math.round(((1 - (userRank / 47300)) * 100));
-    
+
+  if (isLoading) {
     return (
-      <Animated.View 
-        style={[
-          styles.userCard,
-          {
-            opacity: fadeAnim,
-            transform: [{ scale: pulseAnim }],
-          }
-        ]}
-      >
-        <View style={styles.userCardContent}>
-          <View style={styles.userCardLeft}>
-            <Text style={styles.userCardLabel}>Your Rank</Text>
-            <Text style={styles.userCardRank}>#{userRank}</Text>
-            <Text style={styles.userCardSubtext}>of {totalPlayers} capybaras</Text>
-          </View>
-          <View style={styles.userCardRight}>
-            <Text style={styles.userCardLabel}>Top {percentile}%</Text>
-            <Text style={styles.userCardScore}>
-              {(currentUserDailyScore ?? 0).toLocaleString()}
-            </Text>
-            <Text style={styles.userCardSubtext}>points</Text>
-          </View>
+      <SafeAreaView style={styles.container}>
+        {renderHeader()}
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>Loading rankings...</Text>
         </View>
-      </Animated.View>
+      </SafeAreaView>
     );
-  };
-  
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => {
-          if (navigation.canGoBack()) {
-            navigation.goBack();
-          } else {
-            navigation.navigate('Home');
-          }
-        }} style={styles.backButton}>
-          <Icon name="arrow-left" size={24} color="#333" />
-        </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>Capybara Rankings</Text>
-          <Text style={styles.headerSubtitle}>CaBBybara Leaderboard</Text>
-        </View>
-        <View style={{ width: 40 }} />
-      </View>
-      
-      {/* Filler Space */}
-      <View style={styles.fillerSpace} />
-      
-      {/* Tab Bar */}
-      <View style={styles.tabBar}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'global' && styles.activeTab]}
-          onPress={() => handleTabChange('global')}
-        >
-          <Icon name="earth" size={20} color={activeTab === 'global' ? '#FF9F1C' : '#777'} />
-          <Text style={[styles.tabText, activeTab === 'global' && styles.activeTabText]}>Global</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'friends' && styles.activeTab]}
-          onPress={() => handleTabChange('friends')}
-        >
-          <Icon name="account-group" size={20} color={activeTab === 'friends' ? '#FF9F1C' : '#777'} />
-          <Text style={[styles.tabText, activeTab === 'friends' && styles.activeTabText]}>Friends</Text>
-        </TouchableOpacity>
-      </View>
-      
-      {/* User's rank card */}
+      {renderHeader()}
+      {renderTimeFilter()}
       {renderUserCard()}
       
-      {/* Leaderboard list */}
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
-            colors={['#FF9F1C']}
-            tintColor="#FF9F1C"
+            colors={[theme.colors.primary]}
           />
         }
       >
-        {leaderboardData.map((item, index) => renderLeaderboardItem(item, index))}
-        
-        <View style={styles.footer}>
-          <Icon name="rodent" size={20} color="#999" />
-          <Text style={styles.footerText}>
-            {'Capybara scores reset daily at midnight'}
-          </Text>
+        <View style={styles.leaderboardContainer}>
+          {leaderboard.map((entry, index) => renderLeaderboardItem(entry, index))}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -461,243 +278,168 @@ const LeaderboardScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFF8E7',
-  },
-  fillerSpace: {
-    height: 40,
+    backgroundColor: theme.colors.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.lg,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f5f5f5',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitleContainer: {
-    alignItems: 'center',
+    padding: theme.spacing.sm,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
+    fontSize: theme.typography.fontSize.xxl,
+    fontFamily: theme.typography.fontFamily.quicksandBold,
+    color: theme.colors.textPrimary,
   },
-  headerSubtitle: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'sans-serif',
+  placeholder: {
+    width: 40,
   },
-  tabBar: {
+  filterContainer: {
     flexDirection: 'row',
-    backgroundColor: 'white',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+    gap: theme.spacing.sm,
   },
-  tab: {
+  filterButton: {
     flex: 1,
-    flexDirection: 'row',
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.borderRadius.lg,
+    backgroundColor: theme.colors.backgroundLight,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
   },
-  activeTab: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#FF9F1C',
+  filterButtonActive: {
+    backgroundColor: theme.colors.primary,
   },
-  tabText: {
-    marginLeft: 6,
-    fontSize: 14,
-    color: '#777',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif',
+  filterButtonText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.bold,
+    color: theme.colors.textSecondary,
   },
-  activeTabText: {
-    color: '#FF9F1C',
-    fontWeight: 'bold',
+  filterButtonTextActive: {
+    color: theme.colors.textWhite,
   },
   userCard: {
-    backgroundColor: '#FF9F1C',
-    margin: 16,
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  userCardContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: theme.colors.primary,
+    marginHorizontal: theme.spacing.lg,
+    marginBottom: theme.spacing.lg,
+    padding: theme.spacing.base,
+    borderRadius: theme.borderRadius.base,
   },
   userCardLeft: {
-    alignItems: 'flex-start',
-  },
-  userCardRight: {
-    alignItems: 'flex-end',
-  },
-  userCardLabel: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginBottom: 4,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'sans-serif',
-  },
-  userCardRank: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: 'white',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Black' : 'sans-serif-black',
-  },
-  userCardScore: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
-  },
-  userCardSubtext: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginTop: 2,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'sans-serif',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 100,
-  },
-  leaderboardItem: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginVertical: 4,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    gap: theme.spacing.md,
   },
-  currentUserItem: {
-    backgroundColor: '#FFF5E6',
-    borderWidth: 2,
-    borderColor: '#FF9F1C',
+  userAvatar: {
+    fontSize: 32,
   },
-  rankContainer: {
-    width: 60,
+  userCardName: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.regular,
+    color: theme.colors.textWhite,
+    opacity: 0.9,
+  },
+  userCardScore: {
+    fontSize: theme.typography.fontSize.lg,
+    fontFamily: theme.typography.fontFamily.bold,
+    color: theme.colors.textWhite,
+  },
+  userCardRight: {
     alignItems: 'center',
   },
-  medal: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  userCardRank: {
+    fontSize: theme.typography.fontSize.xxl,
+    fontFamily: theme.typography.fontFamily.bold,
+    color: theme.colors.textWhite,
+  },
+  loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    flexDirection: 'column',
   },
-  medalText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: 'white',
-    marginTop: -2,
+  loadingText: {
+    marginTop: theme.spacing.md,
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.regular,
+    color: theme.colors.textSecondary,
+  },
+  leaderboardContainer: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.xxl,
+  },
+  leaderboardItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.backgroundLight,
+    padding: theme.spacing.base,
+    borderRadius: theme.borderRadius.base,
+    marginBottom: theme.spacing.sm,
+    ...theme.shadows.small,
+  },
+  currentUserItem: {
+    backgroundColor: theme.colors.primary + '10',
+    borderWidth: 2,
+    borderColor: theme.colors.primary,
+  },
+  topThreeItem: {
+    ...theme.shadows.medium,
+  },
+  rankContainer: {
+    width: 40,
+    alignItems: 'center',
+  },
+  rankIcon: {
+    fontSize: 24,
   },
   rankText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#666',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
+    fontSize: theme.typography.fontSize.lg,
+    fontFamily: theme.typography.fontFamily.bold,
   },
-  currentUserRank: {
-    color: '#FF9F1C',
+  avatar: {
+    fontSize: 28,
+    marginHorizontal: theme.spacing.md,
   },
-  playerInfo: {
+  userInfo: {
     flex: 1,
-    marginLeft: 16,
   },
-  playerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif-medium',
-  },
-  currentUserName: {
-    color: '#FF9F1C',
-    fontWeight: 'bold',
+  username: {
+    fontSize: theme.typography.fontSize.md,
+    fontFamily: theme.typography.fontFamily.bold,
+    color: theme.colors.textPrimary,
+    marginBottom: 2,
   },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
   },
   scoreText: {
-    fontSize: 14,
-    color: '#666',
-    marginLeft: 4,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'sans-serif',
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.regular,
+    color: theme.colors.textSecondary,
   },
   streakText: {
-    fontSize: 14,
-    color: '#666',
-    marginLeft: 4,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'sans-serif',
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.regular,
+    color: theme.colors.textSecondary,
   },
-  lastActive: {
-    fontSize: 12,
-    color: '#999',
-    marginLeft: 'auto',
-    fontStyle: 'italic',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'sans-serif',
+  youBadge: {
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 4,
+    borderRadius: theme.borderRadius.sm,
   },
-  separator: {
-    marginVertical: 20,
-    alignItems: 'center',
-  },
-  separatorLine: {
-    height: 1,
-    backgroundColor: '#e0e0e0',
-    width: '100%',
-  },
-  separatorTextContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF8E7',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    position: 'absolute',
-  },
-  separatorText: {
-    fontSize: 12,
-    color: '#999',
-    marginHorizontal: 8,
-    fontStyle: 'italic',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'sans-serif',
-  },
-  footer: {
-    alignItems: 'center',
-    paddingVertical: 20,
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  footerText: {
-    fontSize: 12,
-    color: '#999',
-    fontStyle: 'italic',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'sans-serif',
-    marginLeft: 8,
+  youBadgeText: {
+    fontSize: theme.typography.fontSize.xs,
+    fontFamily: theme.typography.fontFamily.bold,
+    color: theme.colors.textWhite,
   },
 });
 

@@ -1,337 +1,353 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { startOfDay, differenceInDays } from 'date-fns';
+import { logEvent } from '../config/Firebase';
+import { DailyGoal } from '../types';
 
-interface DailyGoal {
+interface Achievement {
   id: string;
   title: string;
   description: string;
-  target: number;
-  current: number;
-  reward: number; // minutes
-  completed: boolean;
-  type: 'questions' | 'streak' | 'accuracy' | 'time';
-}
-
-interface UserStats {
-  totalScore: number;
-  totalQuestionsAnswered: number;
-  correctAnswers: number;
-  bestStreak: number;
-  dailyStreak: number;
-  lastPlayedDate: string;
-  totalPlayTime: number; // minutes
-  categoriesPlayed: { [key: string]: number };
-  difficultyStats: {
-    easy: { correct: number; total: number };
-    medium: { correct: number; total: number };
-    hard: { correct: number; total: number };
-  };
-  leaderboardRank: number;
+  icon: string;
+  unlocked: boolean;
+  unlockedAt?: string;
 }
 
 interface UserState {
   username: string;
-  isFirstTime: boolean;
-  stats: UserStats;
+  score: number;
+  highScore: number;
+  streak: number;
+  maxStreak: number;
+  totalCorrectAnswers: number;
+  totalQuestions: number;
+  dailyGoal: {
+    current: number;
+    target: number;
+    lastUpdated: string;
+  };
   dailyGoals: DailyGoal[];
-  flowStreak: number;
-  lastFlowDate: string;
+  achievements: Achievement[];
+  lastPlayedDate: string;
   
   // Actions
   setUsername: (name: string) => void;
-  setFirstTime: (isFirst: boolean) => void;
-  updateStats: (updates: Partial<UserStats>) => void;
-  incrementScore: (points: number) => void;
-  recordAnswer: (correct: boolean, category: string, difficulty: string) => void;
-  updateStreak: (newStreak: number) => void;
-  checkDailyGoals: () => void;
+  addScore: (points: number) => void;
+  addStreak: () => void;
+  resetStreak: () => void;
+  updateDailyGoal: (correct: number) => void;
   completeGoal: (goalId: string) => void;
-  updateFlow: () => void;
-  saveData: () => Promise<void>;
-  loadData: () => Promise<void>;
-  initializeApp: () => Promise<void>;
-  updateLeaderboardRank: () => void;
-  generateDailyGoals: () => void;
+  unlockAchievement: (achievementId: string) => void;
+  incrementStats: (correct: boolean) => void;
+  loadUserData: () => Promise<void>;
+  saveUserData: () => Promise<void>;
   resetProgress: () => Promise<void>;
 }
 
-const STORAGE_KEY = '@BrainBites:userData';
-
-// Generate fake leaderboard data
-const generateLeaderboardPosition = (score: number, questionsPerDay: number): number => {
-  // Simulate ranking based on score and activity
-  const baseRank = 10000 - Math.floor(score / 100);
-  const activityBonus = Math.floor(questionsPerDay * 50);
-  const randomVariance = Math.floor(Math.random() * 500) - 250;
-  
-  return Math.max(1, baseRank - activityBonus + randomVariance);
-};
+const defaultAchievements: Achievement[] = [
+  {
+    id: 'first_correct',
+    title: 'First Steps',
+    description: 'Answer your first question correctly',
+    icon: '🎯',
+    unlocked: false,
+  },
+  {
+    id: 'streak_5',
+    title: 'On Fire!',
+    description: 'Get a 5-question streak',
+    icon: '🔥',
+    unlocked: false,
+  },
+  {
+    id: 'streak_10',
+    title: 'Unstoppable!',
+    description: 'Get a 10-question streak',
+    icon: '⚡',
+    unlocked: false,
+  },
+  {
+    id: 'perfect_quiz',
+    title: 'Perfectionist',
+    description: 'Complete a quiz with 100% accuracy',
+    icon: '⭐',
+    unlocked: false,
+  },
+  {
+    id: 'daily_goal',
+    title: 'Daily Champion',
+    description: 'Complete your daily goal',
+    icon: '🏆',
+    unlocked: false,
+  },
+  {
+    id: 'score_100',
+    title: 'Century Club',
+    description: 'Reach 100 points',
+    icon: '💯',
+    unlocked: false,
+  },
+  {
+    id: 'score_500',
+    title: 'High Roller',
+    description: 'Reach 500 points',
+    icon: '💎',
+    unlocked: false,
+  },
+  {
+    id: 'early_bird',
+    title: 'Early Bird',
+    description: 'Play before 8 AM',
+    icon: '🌅',
+    unlocked: false,
+  },
+  {
+    id: 'night_owl',
+    title: 'Night Owl',
+    description: 'Play after 10 PM',
+    icon: '🦉',
+    unlocked: false,
+  },
+];
 
 export const useUserStore = create<UserState>((set, get) => ({
   username: 'CaBBy',
-  isFirstTime: false,
-  stats: {
-    totalScore: 0,
-    totalQuestionsAnswered: 0,
-    correctAnswers: 0,
-    bestStreak: 0,
-    dailyStreak: 0,
-    lastPlayedDate: new Date().toISOString(),
-    totalPlayTime: 0,
-    categoriesPlayed: {},
-    difficultyStats: {
-      easy: { correct: 0, total: 0 },
-      medium: { correct: 0, total: 0 },
-      hard: { correct: 0, total: 0 },
-    },
-    leaderboardRank: 9999,
+  score: 0,
+  highScore: 0,
+  streak: 0,
+  maxStreak: 0,
+  totalCorrectAnswers: 0,
+  totalQuestions: 0,
+  dailyGoal: {
+    current: 0,
+    target: 10,
+    lastUpdated: new Date().toDateString(),
   },
-  dailyGoals: [],
-  flowStreak: 0,
-  lastFlowDate: '',
+  dailyGoals: [
+    {
+      id: 'daily_questions',
+      description: 'Answer 10 questions today',
+      target: 10,
+      current: 0,
+      reward: 300, // 5 minutes
+      completed: false,
+      type: 'questions',
+    },
+    {
+      id: 'daily_streak',
+      description: 'Get a 5-question streak',
+      target: 5,
+      current: 0,
+      reward: 180, // 3 minutes
+      completed: false,
+      type: 'streak',
+    },
+    {
+      id: 'daily_accuracy',
+      description: 'Maintain 80% accuracy',
+      target: 8,
+      current: 0,
+      reward: 240, // 4 minutes
+      completed: false,
+      type: 'accuracy',
+    },
+  ],
+  achievements: defaultAchievements,
+  lastPlayedDate: new Date().toDateString(),
 
-  setUsername: (name) => set({ username: name }),
-  setFirstTime: (isFirst) => set({ isFirstTime: isFirst }),
+  setUsername: (name) => {
+    set({ username: name });
+    get().saveUserData();
+  },
 
-  updateStats: (updates) =>
-    set((state) => ({
-      stats: { ...state.stats, ...updates },
-    })),
-
-  incrementScore: (points) =>
-    set((state) => ({
-      stats: {
-        ...state.stats,
-        totalScore: state.stats.totalScore + points,
-      },
-    })),
-
-  recordAnswer: (correct, category, difficulty) =>
+  addScore: (points) => {
     set((state) => {
-      const newStats = { ...state.stats };
-      newStats.totalQuestionsAnswered++;
+      const newScore = state.score + points;
+      const newHighScore = Math.max(newScore, state.highScore);
       
-      if (correct) {
-        newStats.correctAnswers++;
+      // Log analytics
+      logEvent('score_earned', { points, total_score: newScore });
+      
+      // Check score achievements
+      if (newScore >= 100 && !state.achievements.find(a => a.id === 'score_100')?.unlocked) {
+        get().unlockAchievement('score_100');
+      }
+      if (newScore >= 500 && !state.achievements.find(a => a.id === 'score_500')?.unlocked) {
+        get().unlockAchievement('score_500');
       }
       
-      // Update category stats
-      if (!newStats.categoriesPlayed[category]) {
-        newStats.categoriesPlayed[category] = 0;
-      }
-      newStats.categoriesPlayed[category]++;
-      
-      // Update difficulty stats
-      const diffKey = difficulty.toLowerCase() as 'easy' | 'medium' | 'hard';
-      newStats.difficultyStats[diffKey].total++;
-      if (correct) {
-        newStats.difficultyStats[diffKey].correct++;
-      }
-      
-      return { stats: newStats };
-    }),
+      return { score: newScore, highScore: newHighScore };
+    });
+    get().saveUserData();
+  },
 
-  updateStreak: (newStreak) =>
-    set((state) => ({
-      stats: {
-        ...state.stats,
-        bestStreak: Math.max(state.stats.bestStreak, newStreak),
-      },
-    })),
-
-  checkDailyGoals: () => {
-    const state = get();
-    const updatedGoals = state.dailyGoals.map((goal) => {
-      if (goal.completed) return goal;
+  addStreak: () => {
+    set((state) => {
+      const newStreak = state.streak + 1;
+      const newMaxStreak = Math.max(newStreak, state.maxStreak);
       
-      let current = 0;
-      switch (goal.type) {
-        case 'questions':
-          current = state.stats.totalQuestionsAnswered;
-          break;
-        case 'streak':
-          current = state.stats.bestStreak;
-          break;
-        case 'accuracy':
-          current = state.stats.correctAnswers > 0
-            ? Math.round((state.stats.correctAnswers / state.stats.totalQuestionsAnswered) * 100)
-            : 0;
-          break;
-        case 'time':
-          current = state.stats.totalPlayTime;
-          break;
+      // Check streak achievements
+      if (newStreak === 5 && !state.achievements.find(a => a.id === 'streak_5')?.unlocked) {
+        get().unlockAchievement('streak_5');
+      }
+      if (newStreak === 10 && !state.achievements.find(a => a.id === 'streak_10')?.unlocked) {
+        get().unlockAchievement('streak_10');
       }
       
-      const completed = current >= goal.target;
-      return { ...goal, current, completed };
+      return { streak: newStreak, maxStreak: newMaxStreak };
+    });
+  },
+
+  resetStreak: () => {
+    set({ streak: 0 });
+    logEvent('streak_broken', { previous_streak: get().streak });
+  },
+
+  updateDailyGoal: (correct) => {
+    set((state) => {
+      const today = new Date().toDateString();
+      let dailyGoal = { ...state.dailyGoal };
+      
+      // Reset if it's a new day
+      if (dailyGoal.lastUpdated !== today) {
+        dailyGoal = {
+          current: 0,
+          target: 10,
+          lastUpdated: today,
+        };
+      }
+      
+      dailyGoal.current = Math.min(dailyGoal.current + correct, dailyGoal.target);
+      
+      // Check daily goal achievement
+      if (dailyGoal.current >= dailyGoal.target && 
+          !state.achievements.find(a => a.id === 'daily_goal')?.unlocked) {
+        get().unlockAchievement('daily_goal');
+      }
+      
+      return { dailyGoal };
+    });
+    get().saveUserData();
+  },
+
+  completeGoal: (goalId) => {
+    set((state) => {
+      const updatedGoals = state.dailyGoals.map(goal => 
+        goal.id === goalId ? { ...goal, completed: true } : goal
+      );
+      return { dailyGoals: updatedGoals };
+    });
+    get().saveUserData();
+  },
+
+  unlockAchievement: (achievementId) => {
+    set((state) => {
+      const achievements = state.achievements.map(a => 
+        a.id === achievementId 
+          ? { ...a, unlocked: true, unlockedAt: new Date().toISOString() }
+          : a
+      );
+      
+      // Log analytics
+      logEvent('achievement_unlocked', { achievement_id: achievementId });
+      
+      return { achievements };
+    });
+    get().saveUserData();
+  },
+
+  incrementStats: (correct) => {
+    set((state) => {
+      const totalQuestions = state.totalQuestions + 1;
+      const totalCorrectAnswers = state.totalCorrectAnswers + (correct ? 1 : 0);
+      
+      // Check first correct achievement
+      if (correct && totalCorrectAnswers === 1 && 
+          !state.achievements.find(a => a.id === 'first_correct')?.unlocked) {
+        get().unlockAchievement('first_correct');
+      }
+      
+      // Check time-based achievements
+      const hour = new Date().getHours();
+      if (hour < 8 && !state.achievements.find(a => a.id === 'early_bird')?.unlocked) {
+        get().unlockAchievement('early_bird');
+      }
+      if (hour >= 22 && !state.achievements.find(a => a.id === 'night_owl')?.unlocked) {
+        get().unlockAchievement('night_owl');
+      }
+      
+      return { totalQuestions, totalCorrectAnswers };
     });
     
-    set({ dailyGoals: updatedGoals });
-  },
-
-  completeGoal: (goalId) =>
-    set((state) => ({
-      dailyGoals: state.dailyGoals.map((goal) =>
-        goal.id === goalId ? { ...goal, completed: true } : goal
-      ),
-    })),
-
-  updateFlow: () => {
-    const today = startOfDay(new Date()).toISOString();
-    const state = get();
-    
-    if (state.lastFlowDate === today) {
-      // Already updated today
-      return;
+    if (correct) {
+      get().updateDailyGoal(1);
     }
     
-    const lastFlow = state.lastFlowDate ? new Date(state.lastFlowDate) : null;
-    const daysSinceLastFlow = lastFlow ? differenceInDays(new Date(), lastFlow) : 0;
-    
-    if (daysSinceLastFlow === 1) {
-      // Consecutive day
-      set({ flowStreak: state.flowStreak + 1, lastFlowDate: today });
-    } else if (daysSinceLastFlow > 1) {
-      // Streak broken
-      set({ flowStreak: 1, lastFlowDate: today });
-    } else {
-      // First time or same day
-      set({ flowStreak: state.flowStreak || 1, lastFlowDate: today });
-    }
+    get().saveUserData();
   },
 
-  updateLeaderboardRank: () => {
-    const state = get();
-    const questionsPerDay = state.stats.totalQuestionsAnswered / Math.max(1, state.flowStreak);
-    const newRank = generateLeaderboardPosition(state.stats.totalScore, questionsPerDay);
-    
-    set((state) => ({
-      stats: { ...state.stats, leaderboardRank: newRank },
-    }));
-  },
-
-  generateDailyGoals: () => {
-    const goals: DailyGoal[] = [
-      {
-        id: '1',
-        title: 'Answer 15 questions correctly',
-        description: 'Answer 15 questions correctly',
-        target: 15,
-        current: 0,
-        reward: 60,
-        completed: false,
-        type: 'questions',
-      },
-      {
-        id: '2',
-        title: 'Achieve a 10 question streak',
-        description: 'Achieve a 10 question streak',
-        target: 10,
-        current: 0,
-        reward: 45,
-        completed: false,
-        type: 'streak',
-      },
-      {
-        id: '3',
-        title: 'Maintain 80% accuracy',
-        description: 'Maintain 80% accuracy',
-        target: 80,
-        current: 0,
-        reward: 30,
-        completed: false,
-        type: 'accuracy',
-      },
-      {
-        id: '4',
-        title: 'Study for 30 minutes',
-        description: 'Study for 30 minutes',
-        target: 30,
-        current: 0,
-        reward: 90,
-        completed: false,
-        type: 'time',
-      },
-    ];
-    
-    set({ dailyGoals: goals });
-  },
-
-  saveData: async () => {
+  loadUserData: async () => {
     try {
-      const state = get();
-      const dataToSave = {
-        username: state.username,
-        isFirstTime: state.isFirstTime,
-        stats: state.stats,
-        dailyGoals: state.dailyGoals,
-        flowStreak: state.flowStreak,
-        lastFlowDate: state.lastFlowDate,
-      };
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
-    } catch (error) {
-      console.error('Failed to save user data:', error);
-    }
-  },
-
-  loadData: async () => {
-    try {
-      const savedData = await AsyncStorage.getItem(STORAGE_KEY);
-      if (savedData) {
-        const parsed = JSON.parse(savedData);
-        set(parsed);
+      const data = await AsyncStorage.getItem('brainbites_user_data');
+      if (data) {
+        const parsed = JSON.parse(data);
+        set({
+          username: parsed.username || 'CaBBy',
+          score: parsed.score || 0,
+          highScore: parsed.highScore || 0,
+          streak: 0, // Always reset streak on app start
+          maxStreak: parsed.maxStreak || 0,
+          totalCorrectAnswers: parsed.totalCorrectAnswers || 0,
+          totalQuestions: parsed.totalQuestions || 0,
+          dailyGoal: parsed.dailyGoal || {
+            current: 0,
+            target: 10,
+            lastUpdated: new Date().toDateString(),
+          },
+          achievements: parsed.achievements || defaultAchievements,
+          lastPlayedDate: parsed.lastPlayedDate || new Date().toDateString(),
+        });
       }
     } catch (error) {
-      console.error('Failed to load user data:', error);
+      console.error('Error loading user data:', error);
     }
   },
 
-  initializeApp: async () => {
-    await get().loadData();
-    get().updateFlow();
-    
-    // Generate daily goals if it's a new day
-    const today = startOfDay(new Date()).toISOString();
-    const lastGoalDate = await AsyncStorage.getItem('@BrainBites:lastGoalDate');
-    
-    if (lastGoalDate !== today) {
-      get().generateDailyGoals();
-      await AsyncStorage.setItem('@BrainBites:lastGoalDate', today);
+  saveUserData: async () => {
+    try {
+      const state = get();
+      const data = {
+        username: state.username,
+        score: state.score,
+        highScore: state.highScore,
+        maxStreak: state.maxStreak,
+        totalCorrectAnswers: state.totalCorrectAnswers,
+        totalQuestions: state.totalQuestions,
+        dailyGoal: state.dailyGoal,
+        achievements: state.achievements,
+        lastPlayedDate: new Date().toDateString(),
+      };
+      await AsyncStorage.setItem('brainbites_user_data', JSON.stringify(data));
+    } catch (error) {
+      console.error('Error saving user data:', error);
     }
-    
-    get().updateLeaderboardRank();
   },
 
   resetProgress: async () => {
-    try {
-      await AsyncStorage.removeItem(STORAGE_KEY);
-      set({
-        username: 'CaBBy',
-        isFirstTime: false,
-        stats: {
-          totalScore: 0,
-          totalQuestionsAnswered: 0,
-          correctAnswers: 0,
-          bestStreak: 0,
-          dailyStreak: 0,
-          lastPlayedDate: new Date().toISOString(),
-          totalPlayTime: 0,
-          categoriesPlayed: {},
-          difficultyStats: {
-            easy: { correct: 0, total: 0 },
-            medium: { correct: 0, total: 0 },
-            hard: { correct: 0, total: 0 },
-          },
-          leaderboardRank: 9999,
-        },
-        dailyGoals: [],
-        flowStreak: 0,
-        lastFlowDate: '',
-      });
-      console.log('User progress reset successfully.');
-    } catch (error) {
-      console.error('Failed to reset user progress:', error);
-    }
+    set({
+      score: 0,
+      highScore: 0,
+      streak: 0,
+      maxStreak: 0,
+      totalCorrectAnswers: 0,
+      totalQuestions: 0,
+      dailyGoal: {
+        current: 0,
+        target: 10,
+        lastUpdated: new Date().toDateString(),
+      },
+      achievements: defaultAchievements,
+    });
+    await get().saveUserData();
+    logEvent('progress_reset');
   },
 }));

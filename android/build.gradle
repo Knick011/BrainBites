@@ -6,16 +6,21 @@ buildscript {
         targetSdkVersion = 35
         ndkVersion = "27.1.12297006"
         kotlinVersion = "2.1.20"
+        
+        // Add these for Firebase
+        googlePlayServicesVersion = "17.0.0"
+        firebaseMessagingVersion = "23.0.0"
     }
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        classpath("com.android.tools.build:gradle")
+        classpath("com.android.tools.build:gradle:7.3.1")
         classpath("com.facebook.react:react-native-gradle-plugin")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
-        classpath("com.google.gms:google-services:4.4.0")
+        classpath("com.google.gms:google-services:4.3.15") // For Firebase
+        classpath("com.google.firebase:firebase-crashlytics-gradle:2.9.9") // For Crashlytics
     }
 }
 

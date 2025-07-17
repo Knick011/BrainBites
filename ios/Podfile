@@ -1,5 +1,22 @@
-use_react_native!(
+require_relative '../node_modules/react-native/scripts/react_native_pods'
+require_relative '../node_modules/@react-native-community/cli-platform-ios/native_modules'
+
+platform :ios, '12.4'
+install! 'cocoapods', :deterministic_uuids => false
+
+target 'BrainBites' do
+  config = use_native_modules!
+
+  # Flags change depending on the env values.
+  flags = get_default_flags()
+
+  use_react_native!(
     :path => config[:reactNativePath],
+    # Hermes is now enabled by default. Disable by setting this flag to false.
+    # Upcoming versions of React Native may rely on get_default_flags(), but
+    # we make it explicit here to aid in the React Native upgrade process.
+    :hermes_enabled => flags[:hermes_enabled],
+    :fabric_enabled => flags[:fabric_enabled],
     # An absolute path to your application root.
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
@@ -7,13 +24,40 @@ use_react_native!(
   # Add Firebase pods
   pod 'Firebase/Analytics'
   pod 'Firebase/Crashlytics'
+  pod 'Firebase/AdMob'
   
-  # Add Google Mobile Ads
-  pod 'Google-Mobile-Ads-SDK'
-  
-  # Permissions
-  permissions_path = '../node_modules/react-native-permissions/ios'
-  pod 'Permission-AppTrackingTransparency', :path => "#{permissions_path}/AppTrackingTransparency"
-  
-  # Vector Icons
+  # Add other required pods
   pod 'RNVectorIcons', :path => '../node_modules/react-native-vector-icons'
+  pod 'BVLinearGradient', :path => '../node_modules/react-native-linear-gradient'
+  pod 'RNFS', :path => '../node_modules/react-native-fs'
+  pod 'RNSound', :path => '../node_modules/react-native-sound'
+  pod 'RNPermissions', :path => '../node_modules/react-native-permissions'
+
+  target 'BrainBitesTests' do
+    inherit! :complete
+    # Pods for testing
+  end
+
+  post_install do |installer|
+    react_native_post_install(
+      installer,
+      # Set `mac_catalyst_enabled` to `true` in order to apply patches
+      # necessary for Mac Catalyst builds
+      :mac_catalyst_enabled => false
+    )
+    __apply_Xcode_12_5_M1_post_install_workaround(installer)
+    
+    # Fix for building on M1 Macs
+    installer.pods_project.build_configurations.each do |config|
+      config.build_settings["EXCLUDED_ARCHS[sdk=iphonesimulator*]"] = "arm64"
+    end
+    
+    # Fix for React Native 0.72+ permissions
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
+        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'PERMISSION_NOTIFICATIONS=1'
+      end
+    end
+  end
+end

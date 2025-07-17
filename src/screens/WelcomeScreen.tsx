@@ -16,7 +16,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../../App';
+import { RootStackParamList } from '../types';
 import SoundService from '../services/SoundService';
 import EnhancedMascotDisplay from '../components/Mascot/EnhancedMascotDisplay';
 import theme from '../styles/theme';
@@ -53,7 +53,7 @@ const WelcomeScreen: React.FC = () => {
   const progressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    SoundService.startMenuMusic();
+    SoundService.playMenuMusic();
     
     Animated.parallel([
       Animated.timing(fadeAnim, {

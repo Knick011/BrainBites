@@ -12,9 +12,9 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from '../../App';
+import { RootStackParamList } from '../types';
 import { useUserStore } from '../store/useUserStore';
-import { SoundService } from '../services/SoundService';
+import SoundService from '../services/SoundService';
 import DailyFlowCard from '../components/DailyFlowCard';
 
 type NavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;
@@ -62,7 +62,7 @@ const HomeScreen: React.FC = () => {
   }, []);
 
   const handleDifficultyPress = (difficulty: typeof DIFFICULTY_LEVELS[0]) => {
-    SoundService.playButtonClick();
+    SoundService.playButtonPress();
     navigation.navigate('Quiz', { 
       difficulty: difficulty.id as 'easy' | 'medium' | 'hard',
       category: undefined // No category filter, only difficulty
@@ -70,22 +70,22 @@ const HomeScreen: React.FC = () => {
   };
 
   const handleSettingsPress = () => {
-    SoundService.playButtonClick();
+    SoundService.playButtonPress();
     navigation.navigate('Settings');
   };
 
   const handleLeaderboardPress = () => {
-    SoundService.playButtonClick();
+    SoundService.playButtonPress();
     navigation.navigate('Leaderboard');
   };
 
   const handleCategoriesPress = () => {
-    SoundService.playButtonClick();
-    navigation.navigate('Categories', { difficulty: 'medium' });
+    SoundService.playButtonPress();
+    navigation.navigate('Categories');
   };
 
   const handleDailyTasksPress = () => {
-    SoundService.playButtonClick();
+    SoundService.playButtonPress();
     navigation.navigate('DailyGoals');
   };
 

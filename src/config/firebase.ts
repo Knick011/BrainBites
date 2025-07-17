@@ -1,66 +1,64 @@
 // src/config/Firebase.ts
-import { Platform } from 'react-native';
+// Firebase Analytics App ID: 1:1089165314678:android:bb38e368be58e1e488ad57
+// Project ID: brainbites-analytics
+import analytics from '@react-native-firebase/analytics';
+import crashlytics from '@react-native-firebase/crashlytics';
 
-let firebaseApp: any = null;
-let analytics: any = null;
-let crashlytics: any = null;
-
-// Initialize Firebase with proper error handling
 export const initializeFirebase = async () => {
   try {
-    console.log('🔥 Initializing Firebase...');
+    // Enable Analytics collection
+    await analytics().setAnalyticsCollectionEnabled(true);
     
-    // Import Firebase modules
-    const { default: firebase } = await import('@react-native-firebase/app');
+    // Enable Crashlytics
+    await crashlytics().setCrashlyticsCollectionEnabled(true);
     
-    // Check if Firebase is already initialized
-    if (firebase.apps.length === 0) {
-      console.log('⚠️ No Firebase apps found - this might indicate a configuration issue');
-      return false;
-    }
-    
-    firebaseApp = firebase.app();
-    console.log('✅ Firebase app initialized');
-    
-    // Initialize Analytics
-    try {
-      const analyticsModule = await import('@react-native-firebase/analytics');
-      analytics = analyticsModule.default();
-      await analytics.setAnalyticsCollectionEnabled(true);
-      console.log('📊 Firebase Analytics initialized');
-    } catch (error) {
-      console.log('⚠️ Firebase Analytics not available:', error);
-    }
-    
-    // Initialize Crashlytics
-    try {
-      const crashlyticsModule = await import('@react-native-firebase/crashlytics');
-      crashlytics = crashlyticsModule.default();
-      console.log('🔴 Firebase Crashlytics initialized');
-    } catch (error) {
-      console.log('⚠️ Firebase Crashlytics not available:', error);
-    }
-    
-    console.log('✅ Firebase initialized successfully');
-    return true;
+    console.log('Firebase initialized successfully');
   } catch (error) {
-    console.log('❌ Firebase initialization failed:', error);
-    return false;
+    console.error('Firebase initialization error:', error);
   }
 };
 
-// Export Firebase instances
-export { firebaseApp, analytics, crashlytics };
+// Analytics helper functions
+export const logEvent = async (eventName: string, params?: any) => {
+  try {
+    await analytics().logEvent(eventName, params);
+  } catch (error) {
+    console.error('Analytics log error:', error);
+  }
+};
 
-// Firebase configuration object (for manual initialization if needed)
-export const firebaseConfig = {
-  // These will be automatically read from google-services.json/GoogleService-Info.plist
-  // Only add these if you need manual configuration
-  apiKey: __DEV__ ? 'your-dev-api-key' : 'your-prod-api-key',
-  authDomain: 'brainbites-app.firebaseapp.com',
-  projectId: 'brainbites-app',
-  storageBucket: 'brainbites-app.appspot.com',
-  messagingSenderId: '123456789',
-  appId: Platform.OS === 'ios' ? 'ios-app-id' : 'android-app-id',
-  measurementId: 'G-MEASUREMENT-ID',
+export const logScreenView = async (screenName: string) => {
+  try {
+    await analytics().logScreenView({
+      screen_name: screenName,
+      screen_class: screenName,
+    });
+  } catch (error) {
+    console.error('Screen view log error:', error);
+  }
+};
+
+// User properties
+export const setUserProperties = async (properties: { [key: string]: string }) => {
+  try {
+    for (const [key, value] of Object.entries(properties)) {
+      await analytics().setUserProperty(key, value);
+    }
+  } catch (error) {
+    console.error('User properties error:', error);
+  }
+};
+
+// Crashlytics helpers
+export const logError = (error: Error, errorInfo?: any) => {
+  crashlytics().recordError(error, errorInfo);
+};
+
+export const setUserId = async (userId: string) => {
+  try {
+    await analytics().setUserId(userId);
+    await crashlytics().setUserId(userId);
+  } catch (error) {
+    console.error('Set user ID error:', error);
+  }
 };

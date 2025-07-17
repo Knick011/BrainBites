@@ -1,189 +1,52 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Animated,
   TouchableOpacity,
-  AppState,
-  AppStateStatus,
+  Animated,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { useTimerStore } from '../../store/useTimerStore';
-import { TimerService } from '../../services/TimerService';
-import { SoundService } from '../../services/SoundService';
-import { NotificationService } from '../../services/NotificationService';
+import { TimerService, TimerState } from '../../services/TimerService';
+import theme from '../../styles/theme';
 
-interface TimerState {
-  remainingTime: number;
-  isRunning: boolean;
-  negativeScore: number;
-  isPaused: boolean;
+interface PersistentTimerProps {
+  onPress?: () => void;
+  position?: 'top' | 'bottom';
+  showAlways?: boolean;
 }
 
-const PersistentTimer: React.FC = () => {
+const PersistentTimer: React.FC<PersistentTimerProps> = ({
+  onPress,
+  position = 'bottom',
+  showAlways = true,
+}) => {
   const [timerState, setTimerState] = useState<TimerState>({
-    remainingTime: 1800000, // 30 minutes in milliseconds
-    isRunning: true,
-    negativeScore: 0,
-    isPaused: false,
+    remainingTime: 0,
+    negativeTime: 0,
+    isTracking: false,
+    isAppForeground: true,
   });
-
-  const [lastWarningTime, setLastWarningTime] = useState<number>(0);
-  const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState);
+  const [isExpanded, setIsExpanded] = useState(false);
   
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const slideAnim = useRef(new Animated.Value(0)).current;
-  const warningShown = useRef(false);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const backgroundTimeRef = useRef<number>(0);
+  const slideAnim = new Animated.Value(0);
+  const pulseAnim = new Animated.Value(1);
 
   useEffect(() => {
-    startTimer();
-    
-    // Listen for app state changes
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
-    
-    return () => {
-      subscription?.remove();
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+    // Listen to timer updates
+    const unsubscribe = TimerService.addListener((state) => {
+      setTimerState(state);
+      
+      // Pulse animation when timer is low
+      if (state.remainingTime > 0 && state.remainingTime <= 60) {
+        startPulseAnimation();
       }
+    });
+
+    return () => {
+      unsubscribe();
     };
   }, []);
-
-  useEffect(() => {
-    const { remainingTime, negativeScore } = timerState;
-    
-    // Handle warnings and notifications
-    if (remainingTime > 0 && remainingTime < 300000 && !warningShown.current) { // 5 minutes
-      warningShown.current = true;
-      handleLowTimeWarning();
-    } else if (remainingTime >= 300000) {
-      warningShown.current = false;
-    }
-
-    // Handle negative time
-    if (remainingTime <= 0 && !timerState.isPaused) {
-      handleTimeExpired();
-    }
-
-    // Animate based on timer state
-    if (remainingTime < 60000 && remainingTime > 0) { // Last minute
-      startPulseAnimation();
-    } else {
-      stopPulseAnimation();
-    }
-  }, [timerState.remainingTime]);
-
-  const startTimer = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-    }
-
-    intervalRef.current = setInterval(() => {
-      setTimerState(prev => {
-        if (prev.isPaused) return prev;
-        
-        const newTime = prev.remainingTime - 1000;
-        let newNegativeScore = prev.negativeScore;
-        
-        // Calculate negative score if time is expired
-        if (newTime <= 0) {
-          newNegativeScore = Math.abs(newTime) / 60000 * 10; // 10 points per minute
-        }
-        
-        return {
-          ...prev,
-          remainingTime: newTime,
-          negativeScore: newNegativeScore,
-        };
-      });
-    }, 1000);
-  };
-
-  const handleAppStateChange = (nextAppState: AppStateStatus) => {
-    if (appState.match(/inactive|background/) && nextAppState === 'active') {
-      // App has come to foreground
-      handleAppReturn();
-    } else if (appState === 'active' && nextAppState.match(/inactive|background/)) {
-      // App is going to background
-      handleAppBackground();
-    }
-    
-    setAppState(nextAppState);
-  };
-
-  const handleAppBackground = () => {
-    backgroundTimeRef.current = Date.now();
-    
-    // Schedule background notifications
-    NotificationService.scheduleBackgroundNotifications();
-    
-    // Pause timer if needed
-    if (timerState.remainingTime > 0) {
-      TimerService.pauseTimer();
-    }
-  };
-
-  const handleAppReturn = () => {
-    const backgroundDuration = Date.now() - backgroundTimeRef.current;
-    
-    // Update timer based on background time
-    if (backgroundDuration > 0 && timerState.isRunning && !timerState.isPaused) {
-      setTimerState(prev => ({
-        ...prev,
-        remainingTime: prev.remainingTime - backgroundDuration,
-      }));
-    }
-    
-    // Resume timer
-    if (timerState.remainingTime > 0) {
-      TimerService.resumeTimer();
-    }
-  };
-
-  const handleLowTimeWarning = () => {
-    const now = Date.now();
-    
-    // Prevent spam warnings (only show once per 5 minutes)
-    if (now - lastWarningTime < 300000) return;
-    
-    setLastWarningTime(now);
-    
-    // Play warning sound
-    SoundService.playTimerWarning();
-    
-    // Show notification
-    const remainingMinutes = Math.ceil(timerState.remainingTime / 60000);
-    NotificationService.notifyLowTime(remainingMinutes);
-    
-    // Animate the timer
-    Animated.sequence([
-      Animated.timing(slideAnim, {
-        toValue: 10,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: -10,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
-
-  const handleTimeExpired = () => {
-    // Only notify once when time first expires
-    if (timerState.remainingTime > -1000) {
-      NotificationService.notifyTimeExpired();
-    }
-  };
 
   const startPulseAnimation = () => {
     Animated.loop(
@@ -202,123 +65,136 @@ const PersistentTimer: React.FC = () => {
     ).start();
   };
 
-  const stopPulseAnimation = () => {
-    pulseAnim.stopAnimation();
-    pulseAnim.setValue(1);
+  const toggleExpanded = () => {
+    const toValue = isExpanded ? 0 : 1;
+    setIsExpanded(!isExpanded);
+    
+    Animated.spring(slideAnim, {
+      toValue,
+      friction: 5,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
   };
 
-  const formatTime = (milliseconds: number): string => {
-    const isNegative = milliseconds < 0;
-    const absTime = Math.abs(milliseconds);
-    
-    const hours = Math.floor(absTime / 3600000);
-    const minutes = Math.floor((absTime % 3600000) / 60000);
-    const seconds = Math.floor((absTime % 60000) / 1000);
-    
-    const timeString = hours > 0 
-      ? `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-      : `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    
-    return isNegative ? `-${timeString}` : timeString;
-  };
-
-  const addTime = (minutes: number) => {
-    const timeToAdd = minutes * 60000;
-    setTimerState(prev => ({
-      ...prev,
-      remainingTime: prev.remainingTime + timeToAdd,
-      negativeScore: prev.remainingTime + timeToAdd <= 0 ? prev.negativeScore : 0,
-    }));
-    
-    // Update timer service
-    TimerService.addTime(minutes);
-  };
-
-  const togglePause = () => {
-    setTimerState(prev => ({ ...prev, isPaused: !prev.isPaused }));
-    
-    if (timerState.isPaused) {
-      TimerService.resumeTimer();
+  const getTimerDisplay = () => {
+    if (timerState.negativeTime > 0) {
+      return {
+        time: `-${TimerService.formatTime(timerState.negativeTime)}`,
+        color: theme.colors.error,
+        icon: 'alert-circle',
+        message: 'Earning negative points!',
+        status: 'negative',
+      };
+    } else if (timerState.remainingTime > 0) {
+      const color = timerState.remainingTime <= 300 
+        ? theme.colors.warning 
+        : theme.colors.success;
+      
+      return {
+        time: TimerService.formatTime(timerState.remainingTime),
+        color,
+        icon: timerState.isTracking ? 'play-circle' : 'pause-circle',
+        message: timerState.isTracking ? 'Timer running' : 'Timer paused',
+        status: 'active',
+      };
     } else {
-      TimerService.pauseTimer();
+      return {
+        time: '0:00',
+        color: theme.colors.textSecondary,
+        icon: 'time-outline',
+        message: 'No time left',
+        status: 'empty',
+      };
     }
   };
 
-  const handleTimerPress = () => {
-    // You can add functionality here, like showing a detailed timer view
-    console.log('Timer pressed');
-  };
+  const display = getTimerDisplay();
+  const shouldShow = showAlways || timerState.remainingTime > 0 || timerState.negativeTime > 0;
 
-  const { remainingTime, negativeScore, isPaused } = timerState;
-  const isNegative = remainingTime < 0;
-  const isWarning = remainingTime > 0 && remainingTime < 300000; // 5 minutes warning
-  const isCritical = remainingTime > 0 && remainingTime < 60000; // 1 minute critical
-
-  const getTimerColor = () => {
-    if (isNegative) return '#F44336';
-    if (isCritical) return '#FF9800';
-    if (isWarning) return '#FFC107';
-    return '#4CAF50';
-  };
-
-  const getBackgroundColor = () => {
-    if (isNegative) return '#F44336';
-    if (isCritical) return '#FF9800';
-    if (isWarning) return '#FFF3E0';
-    return 'rgba(255, 255, 255, 0.95)';
-  };
+  if (!shouldShow) return null;
 
   return (
     <Animated.View
       style={[
         styles.container,
+        position === 'top' ? styles.positionTop : styles.positionBottom,
+        display.status === 'negative' && styles.negativeContainer,
         {
-          backgroundColor: getBackgroundColor(),
           transform: [
-            { scale: isCritical ? pulseAnim : 1 },
-            { translateX: slideAnim },
+            { scale: display.status === 'negative' ? pulseAnim : 1 },
           ],
         },
       ]}
     >
-      <TouchableOpacity 
-        style={styles.timerButton} 
-        onPress={handleTimerPress}
+      <TouchableOpacity
+        style={styles.mainBar}
+        onPress={onPress || toggleExpanded}
         activeOpacity={0.8}
       >
-        <View style={styles.iconContainer}>
-          <Icon
-            name={isPaused ? 'pause' : 'time'}
-            size={20}
-            color={getTimerColor()}
+        <View style={styles.leftContent}>
+          <Icon name={display.icon} size={24} color={display.color} />
+          <Text style={[styles.timeText, { color: display.color }]}>
+            {display.time}
+          </Text>
+        </View>
+        
+        <View style={styles.rightContent}>
+          <Text style={styles.messageText}>{display.message}</Text>
+          <Icon 
+            name={isExpanded ? 'chevron-up' : 'chevron-down'} 
+            size={20} 
+            color={theme.colors.textSecondary} 
           />
         </View>
-        
-        <View style={styles.timeContainer}>
-          <Text
-            style={[
-              styles.timerText,
-              {
-                color: isNegative ? '#FFF' : getTimerColor(),
-              },
-            ]}
-          >
-            {formatTime(remainingTime)}
-          </Text>
-          
-          {isNegative && negativeScore > 0 && (
-            <Text style={styles.penaltyText}>
-              -{Math.floor(negativeScore)} pts
-            </Text>
-          )}
-        </View>
-        
-        {isPaused && (
-          <View style={styles.pausedIndicator}>
-            <Text style={styles.pausedText}>PAUSED</Text>
-          </View>
-        )}
       </TouchableOpacity>
+      
+      {/* Expanded Details */}
+      <Animated.View
+        style={[
+          styles.expandedContent,
+          {
+            opacity: slideAnim,
+            transform: [
+              {
+                translateY: slideAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-20, 0],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        {isExpanded && (
+          <>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Status:</Text>
+              <Text style={styles.detailValue}>
+                {timerState.isAppForeground ? 'App in foreground (paused)' : 'App in background'}
+              </Text>
+            </View>
+            
+            {timerState.negativeTime > 0 && (
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Penalty:</Text>
+                <Text style={[styles.detailValue, { color: theme.colors.error }]}>
+                  -{Math.floor(timerState.negativeTime / 60) * 10} points
+                </Text>
+              </View>
+            )}
+            
+            <View style={styles.tipContainer}>
+              <Icon name="bulb-outline" size={16} color={theme.colors.warning} />
+              <Text style={styles.tipText}>
+                {timerState.remainingTime > 0
+                  ? 'Leave the app to start the timer!'
+                  : 'Play quizzes to earn more time!'}
+              </Text>
+            </View>
+          </>
+        )}
+      </Animated.View>
     </Animated.View>
   );
 };
@@ -326,59 +202,81 @@ const PersistentTimer: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    top: 50,
-    right: 20,
-    borderRadius: 25,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
-    zIndex: 999,
-    minWidth: 120,
+    left: 0,
+    right: 0,
+    backgroundColor: 'white',
+    borderRadius: theme.borderRadius.base,
+    marginHorizontal: theme.spacing.base,
+    ...theme.shadows.medium,
   },
-  timerButton: {
+  positionTop: {
+    top: 100,
+  },
+  positionBottom: {
+    bottom: 100,
+  },
+  negativeContainer: {
+    backgroundColor: '#FFEBEE',
+  },
+  mainBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.base,
+    paddingVertical: theme.spacing.md,
   },
-  iconContainer: {
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
+  leftContent: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: theme.spacing.sm,
   },
-  timeContainer: {
+  rightContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  timeText: {
+    fontSize: theme.typography.fontSize.xl,
+    fontFamily: theme.typography.fontFamily.bold,
+  },
+  messageText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.regular,
+    color: theme.colors.textSecondary,
+  },
+  expandedContent: {
+    paddingHorizontal: theme.spacing.base,
+    paddingBottom: theme.spacing.base,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: theme.spacing.sm,
+  },
+  detailLabel: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.regular,
+    color: theme.colors.textSecondary,
+  },
+  detailValue: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.bold,
+    color: theme.colors.textPrimary,
+  },
+  tipContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    backgroundColor: theme.colors.backgroundDark,
+    padding: theme.spacing.sm,
+    borderRadius: theme.borderRadius.sm,
+    marginTop: theme.spacing.sm,
+  },
+  tipText: {
     flex: 1,
-    alignItems: 'center',
-  },
-  timerText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    fontFamily: 'Nunito-Bold',
-  },
-  penaltyText: {
-    fontSize: 12,
-    color: '#FFCDD2',
-    fontFamily: 'Nunito-Regular',
-    marginTop: 2,
-  },
-  pausedIndicator: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    backgroundColor: '#FF9800',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  pausedText: {
-    fontSize: 10,
-    color: '#FFF',
-    fontWeight: 'bold',
-    fontFamily: 'Nunito-Bold',
+    fontSize: theme.typography.fontSize.xs,
+    fontFamily: theme.typography.fontFamily.regular,
+    color: theme.colors.textSecondary,
   },
 });
 

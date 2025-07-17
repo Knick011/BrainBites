@@ -1,122 +1,121 @@
-import { NativeModules, NativeEventEmitter, Platform } from 'react-native';
+import { NativeModules, NativeEventEmitter, AppState, AppStateStatus } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const { TimerModule } = NativeModules;
+const { BrainBitesTimer } = NativeModules;
+const timerEmitter = new NativeEventEmitter(BrainBitesTimer);
+
+export interface TimerState {
+  remainingTime: number;
+  negativeTime: number;
+  isTracking: boolean;
+  isAppForeground: boolean;
+}
 
 class TimerServiceClass {
-  private eventEmitter: NativeEventEmitter | null = null;
+  private listeners: Array<(state: TimerState) => void> = [];
+  private currentState: TimerState = {
+    remainingTime: 0,
+    negativeTime: 0,
+    isTracking: false,
+    isAppForeground: true,
+  };
+  private appStateSubscription: any;
+  private timerUpdateSubscription: any;
 
-  constructor() {
-    if (Platform.OS === 'android' && TimerModule) {
-      this.eventEmitter = new NativeEventEmitter(TimerModule);
-    }
-  }
-
-  async initialize(): Promise<boolean> {
-    try {
-      // Initialize the timer service
-      console.log('TimerService initialized');
-      return true;
-    } catch (error) {
-      console.error('Failed to initialize timer service:', error);
-      return false;
-    }
-  }
-
-  cleanup(): void {
-    try {
-      // Cleanup any resources
-      console.log('TimerService cleanup completed');
-    } catch (error) {
-      console.error('Failed to cleanup timer service:', error);
-    }
-  }
-
-  getFormattedTime(milliseconds: number): string {
-    const isNegative = milliseconds < 0;
-    const absTime = Math.abs(milliseconds);
+  async init() {
+    console.log('Initializing TimerService');
     
-    const hours = Math.floor(absTime / 3600000);
-    const minutes = Math.floor((absTime % 3600000) / 60000);
-    const seconds = Math.floor((absTime % 60000) / 1000);
+    // Start listening to timer updates
+    this.startListening();
     
-    const formatted = `${hours.toString().padStart(2, '0')}:${minutes
-      .toString()
-      .padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    // Get initial timer state
+    const timeData = await BrainBitesTimer.getRemainingTime();
+    this.currentState.remainingTime = timeData.remainingTime || 0;
+    this.currentState.negativeTime = timeData.negativeTime || 0;
     
-    return isNegative ? `-${formatted}` : formatted;
+    // Listen to app state changes
+    this.appStateSubscription = AppState.addEventListener('change', this.handleAppStateChange);
+    
+    // Notify the native module of initial app state
+    BrainBitesTimer.notifyAppState('foreground');
+    
+    // Start timer service
+    BrainBitesTimer.startTracking();
   }
 
-  async startTimer(): Promise<boolean> {
-    try {
-      if (Platform.OS === 'android' && TimerModule) {
-        return await TimerModule.startTimer();
-      }
-      return false;
-    } catch (error) {
-      console.error('Failed to start timer:', error);
-      return false;
+  private handleAppStateChange = (nextAppState: AppStateStatus) => {
+    console.log('App state changed to:', nextAppState);
+    
+    if (nextAppState === 'active') {
+      BrainBitesTimer.notifyAppState('foreground');
+    } else if (nextAppState === 'background') {
+      BrainBitesTimer.notifyAppState('background');
     }
+  };
+
+  private startListening() {
+    BrainBitesTimer.startListening();
+    
+    this.timerUpdateSubscription = timerEmitter.addListener('timerUpdate', (data: TimerState) => {
+      this.currentState = data;
+      this.notifyListeners();
+    });
   }
 
-  async pauseTimer(): Promise<boolean> {
-    try {
-      if (Platform.OS === 'android' && TimerModule) {
-        return await TimerModule.pauseTimer();
-      }
-      return false;
-    } catch (error) {
-      console.error('Failed to pause timer:', error);
-      return false;
-    }
+  addListener(callback: (state: TimerState) => void) {
+    this.listeners.push(callback);
+    // Immediately call with current state
+    callback(this.currentState);
+    
+    return () => {
+      this.listeners = this.listeners.filter(l => l !== callback);
+    };
   }
 
-  async resumeTimer(): Promise<boolean> {
-    try {
-      if (Platform.OS === 'android' && TimerModule) {
-        return await TimerModule.resumeTimer();
-      }
-      return false;
-    } catch (error) {
-      console.error('Failed to resume timer:', error);
-      return false;
-    }
+  private notifyListeners() {
+    this.listeners.forEach(listener => listener(this.currentState));
   }
 
-  async stopTimer(): Promise<boolean> {
-    try {
-      if (Platform.OS === 'android' && TimerModule) {
-        return await TimerModule.stopTimer();
-      }
-      return false;
-    } catch (error) {
-      console.error('Failed to stop timer:', error);
-      return false;
-    }
+  async addTime(seconds: number) {
+    console.log(`Adding ${seconds} seconds to timer`);
+    await BrainBitesTimer.addTime(seconds);
   }
 
-  async addTime(minutes: number): Promise<boolean> {
-    try {
-      if (Platform.OS === 'android' && TimerModule) {
-        return await TimerModule.addTime(minutes);
-      }
-      return false;
-    } catch (error) {
-      console.error('Failed to add time:', error);
-      return false;
-    }
+  async setTime(seconds: number) {
+    console.log(`Setting timer to ${seconds} seconds`);
+    await BrainBitesTimer.setScreenTime(seconds);
   }
 
-  addListener(eventName: string, callback: (data: any) => void) {
-    if (this.eventEmitter) {
-      return this.eventEmitter.addListener(eventName, callback);
-    }
-    return null;
+  getState(): TimerState {
+    return this.currentState;
   }
 
-  removeListener(eventName: string, callback: (data: any) => void) {
-    if (this.eventEmitter) {
-      this.eventEmitter.removeAllListeners(eventName);
+  getTotalScore(): number {
+    // Calculate total score considering negative time
+    // Each minute of negative time reduces score
+    const negativeScoreReduction = Math.floor(this.currentState.negativeTime / 60) * 10;
+    return Math.max(0, negativeScoreReduction);
+  }
+
+  formatTime(totalSeconds: number): string {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     }
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  cleanup() {
+    if (this.appStateSubscription) {
+      this.appStateSubscription.remove();
+    }
+    if (this.timerUpdateSubscription) {
+      this.timerUpdateSubscription.remove();
+    }
+    BrainBitesTimer.stopListening();
   }
 }
 

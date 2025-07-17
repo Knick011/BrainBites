@@ -11,7 +11,7 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { useUserStore } from '../store/useUserStore';
-import { SoundService } from '../services/SoundService';
+import SoundService from '@services/SoundService';
 import ProgressBar from '../components/ProgressBar';
 
 const DailyGoalsScreen: React.FC = () => {
@@ -102,10 +102,10 @@ const DailyGoalsScreen: React.FC = () => {
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Today's Progress</Text>
           <Text style={styles.summarySubtitle}>
-            {dailyGoals.filter(g => g.completed).length} of {dailyGoals.length} goals completed
+            {dailyGoals?.filter(g => g.completed).length || 0} of {dailyGoals?.length || 0} goals completed
           </Text>
           <View style={styles.summaryProgress}>
-            {dailyGoals.map((goal, index) => (
+            {dailyGoals?.map((goal, index) => (
               <View
                 key={index}
                 style={[
@@ -113,12 +113,12 @@ const DailyGoalsScreen: React.FC = () => {
                   goal.completed && styles.summaryDotCompleted
                 ]}
               />
-            ))}
+            )) || []}
           </View>
         </View>
 
         <View style={styles.goalsContainer}>
-          {dailyGoals.map(renderGoal)}
+          {dailyGoals?.map(renderGoal) || []}
         </View>
       </ScrollView>
     </SafeAreaView>

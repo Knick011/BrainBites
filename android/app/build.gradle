@@ -2,6 +2,7 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 apply plugin: "com.google.gms.google-services"
+apply plugin: "com.google.firebase.crashlytics"
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -76,7 +77,7 @@ def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 android {
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
-    compileSdk rootProject.ext.compileSdkVersion
+    compileSdkVersion rootProject.ext.compileSdkVersion
 
     namespace "com.brainbites"
     defaultConfig {
@@ -85,11 +86,15 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        
+        // Add for AdMob
+        multiDexEnabled true
     }
     
+    // Add for assets (sounds)
     sourceSets {
         main {
-            assets.srcDirs += ['src/main/assets/fonts']
+            assets.srcDirs = ['src/main/assets']
         }
     }
     signingConfigs {
@@ -115,6 +120,7 @@ android {
 }
 
 dependencies {
+    implementation fileTree(dir: "libs", include: ["*.jar"])
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 
@@ -123,4 +129,15 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+    
+    // Firebase
+    implementation platform('com.google.firebase:firebase-bom:32.0.0')
+    implementation 'com.google.firebase:firebase-analytics'
+    implementation 'com.google.firebase:firebase-crashlytics'
+    
+    // AdMob
+    implementation 'com.google.firebase:firebase-ads:22.0.0'
+    
+    // Support for notifications
+    implementation 'androidx.core:core:1.12.0'
 }
