@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Question } from '../../services/QuestionService';
+import { Question } from '../../types';
 import theme from '../../styles/theme';
 
 interface QuizQuestionProps {
@@ -21,24 +21,24 @@ export const QuizQuestion: React.FC<QuizQuestionProps> = ({ question, questionNu
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: theme.colors.white,
+    backgroundColor: theme.colors.backgroundLight,
     borderRadius: theme.borderRadius.xl,
     padding: theme.spacing.xl,
     marginBottom: theme.spacing.lg,
-    ...theme.shadows.md,
+    ...theme.shadows.medium,
   },
   questionNumber: {
     fontSize: theme.typography.fontSize.sm,
-    fontFamily: theme.fonts.primary,
+    fontFamily: theme.typography.fontFamily.regular,
     color: theme.colors.textSecondary,
     marginBottom: theme.spacing.sm,
     textAlign: 'center',
   },
   questionText: {
-    fontSize: theme.typography.fontSize['2xl'],
-    fontFamily: theme.fonts.primaryBold,
+    fontSize: theme.typography.fontSize.xxl,
+    fontFamily: theme.typography.fontFamily.bold,
     color: theme.colors.textPrimary,
     textAlign: 'center',
-    lineHeight: theme.typography.fontSize['2xl'] * 1.3,
+    lineHeight: theme.typography.fontSize.xxl * 1.3,
   },
 });

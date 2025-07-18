@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Question } from '../services/QuestionService';
+import { Question } from '../types';
 
 interface QuizState {
   currentQuestion: Question | null;

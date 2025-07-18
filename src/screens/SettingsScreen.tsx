@@ -13,14 +13,14 @@ import {
 import Icon from 'react-native-vector-icons/Ionicons';
 import Slider from '@react-native-community/slider';
 import { useNavigation } from '@react-navigation/native';
-import { SoundService } from '../services/SoundService';
+import SoundService from '../services/SoundService';
 import { useUserStore } from '../store/useUserStore';
 
 const SettingsScreen: React.FC = () => {
   const navigation = useNavigation();
   const { username, setUsername } = useUserStore();
   
-  const [soundEnabled, setSoundEnabled] = useState(SoundService.isSoundEnabled());
+  const [soundEnabled, setSoundEnabled] = useState(SoundService.getSoundEnabled());
   const [musicVolume, setMusicVolume] = useState(SoundService.getMusicVolume());
   const [effectsVolume, setEffectsVolume] = useState(SoundService.getEffectsVolume());
   const [notifications, setNotifications] = useState(true);

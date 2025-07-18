@@ -1,339 +1,281 @@
-// src/services/EnhancedTimerService.ts
-import { AppState, Platform, NativeModules, DeviceEventEmitter, AppStateStatus } from 'react-native';
+// src/services/EnhancedTimerService.ts - TypeScript version with native integration
+import { NativeModules, DeviceEventEmitter, Platform, AppState, AppStateStatus, EmitterSubscription } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { TimerState } from '../types';
 
-// Type for native module (will be undefined if not available)
-const { BrainBitesTimer } = NativeModules as { BrainBitesTimer?: any };
+const { BrainBitesTimer } = NativeModules;
 
-interface TimerEventData {
-  event: string;
-  [key: string]: any;
-}
-
-interface TimerListener {
-  (data: TimerEventData): void;
-}
-
-interface TrackingStatus {
+interface TimerUpdateData {
+  remainingTime: number;
   isTracking: boolean;
-  isBrainBitesActive: boolean;
-  appState: AppStateStatus;
-  availableTime: number;
+  debtTime: number;
+  isAppForeground: boolean;
 }
 
-interface DebugInfo {
-  availableTime: number;
-  formattedTime: string;
-  isRunning: boolean;
-  isBrainBitesActive: boolean;
-  appState: AppStateStatus;
-  useNativeTimer: boolean;
-  hasTimer?: boolean;
-}
+type TimerListener = (data: TimerUpdateData) => void;
 
 class EnhancedTimerService {
-  private availableTime: number = 0;
-  private listeners: TimerListener[] = [];
-  private readonly STORAGE_KEY = 'brainbites_timer_data';
-  private appState: AppStateStatus = AppState.currentState;
-  private isBrainBitesActive: boolean = true;
   private isInitialized: boolean = false;
+  private listeners: TimerListener[] = [];
+  private timerUpdateSubscription: EmitterSubscription | null = null;
+  private appStateSubscription: EmitterSubscription | null = null;
+  private currentTime: number = 0;
+  private isTracking: boolean = false;
+  private debtTime: number = 0;
   
-  // Use native timer on Android
-  private useNativeTimer: boolean = Platform.OS === 'android' && !!BrainBitesTimer;
-  
-  private appStateSubscription: any;
-  private subscription: any;
-  
-  private sessionStartTime: number = Date.now();
-  private lastActiveTime: number = Date.now();
-  private totalSessionTime: number = 0;
-  private isTrackingSession: boolean = false;
-  
-  constructor() {
-    if (this.useNativeTimer) {
-      console.log('Using native Android timer service');
-      this.setupNativeTimer();
+  // Storage keys
+  private readonly STORAGE_KEYS = {
+    DEBT_TIME: '@BrainBites:debtTime',
+    LAST_UPDATE: '@BrainBites:lastTimerUpdate'
+  };
+
+  async initialize(): Promise<void> {
+    if (this.isInitialized) return;
+    
+    try {
+      // Check if native module is available
+      if (!BrainBitesTimer) {
+        console.error('BrainBitesTimer native module not found');
+        return;
+      }
+      
+      // Start listening for timer updates
+      BrainBitesTimer.startListening();
+      
+      // Subscribe to timer updates from native module
+      this.timerUpdateSubscription = DeviceEventEmitter.addListener(
+        'timerUpdate',
+        this.handleTimerUpdate.bind(this)
+      );
+      
+      // Handle app state changes
+      this.appStateSubscription = AppState.addEventListener(
+        'change',
+        this.handleAppStateChange.bind(this)
+      );
+      
+      // Load debt time
+      await this.loadDebtTime();
+      
+      // Get current remaining time
+      const remainingTime = await BrainBitesTimer.getRemainingTime();
+      this.currentTime = remainingTime;
+      
+      // Start tracking
+      await BrainBitesTimer.startTracking();
+      
+      this.isInitialized = true;
+      console.log('EnhancedTimerService initialized');
+    } catch (error) {
+      console.error('Failed to initialize timer service:', error);
+    }
+  }
+
+  private handleTimerUpdate(data: any): void {
+    // Update from native module
+    this.currentTime = data.remainingTime || 0;
+    this.isTracking = data.isTracking || false;
+    
+    // Track debt time (negative time)
+    if (this.currentTime < 0) {
+      this.debtTime = Math.abs(this.currentTime);
+      this.saveDebtTime();
     } else {
-      console.log('Using JavaScript timer fallback');
+      this.debtTime = 0;
     }
     
-    // Listen to app state changes
-    this.appStateSubscription = AppState.addEventListener('change', this._handleAppStateChange);
-    
-    this.sessionStartTime = Date.now();
-    this.lastActiveTime = Date.now();
-    this.totalSessionTime = 0;
-    this.isTrackingSession = false;
-  }
-  
-  private setupNativeTimer() {
-    if (!BrainBitesTimer) return;
-    
-    // Start listening to native timer
-    BrainBitesTimer.startListening();
-    
-    // Subscribe to timer updates using DeviceEventEmitter for better compatibility
-    this.subscription = DeviceEventEmitter.addListener('timerUpdate', (data: any) => {
-      this.availableTime = data.remainingTime || 0;
-      const isTracking = data.isTracking || false;
-      const isAppForeground = data.isAppForeground || false;
-      
-      // Track session time when app is active
-      if (isAppForeground) {
-        const currentTime = Date.now();
-        const timeDiff = currentTime - this.lastActiveTime;
-        this.totalSessionTime += timeDiff;
-        this.lastActiveTime = currentTime;
-      }
-      
-      // Only log every 10 seconds to reduce spam
-      if (this.availableTime % 10 === 0) {
-        console.log(`Timer update: ${this.availableTime}s, tracking: ${isTracking}`);
-      }
-      
-      this._notifyListeners('timeUpdate', {
-        remaining: this.availableTime,
-        isTracking,
-        isAppForeground
-      });
-      
-      if (this.availableTime <= 0 && isTracking) {
-        this._notifyListeners('timeExpired', {});
-      }
+    // Notify all listeners
+    this.notifyListeners({
+      remainingTime: this.currentTime,
+      isTracking: this.isTracking,
+      debtTime: this.debtTime,
+      isAppForeground: data.isAppForeground || false
     });
   }
-  
-  private _handleAppStateChange = (nextAppState: AppStateStatus) => {
-    const previousState = this.appState;
-    this.appState = nextAppState;
-    
-    console.log(`App state changed: ${previousState} -> ${nextAppState}`);
-    
-    // Update native service about app state
-    if (this.useNativeTimer && BrainBitesTimer) {
-      if (nextAppState === 'active') {
-        this.isBrainBitesActive = true;
-        BrainBitesTimer.notifyAppState('app_foreground');
-      } else {
-        this.isBrainBitesActive = false;
-        BrainBitesTimer.notifyAppState('app_background');
-        
-        // Force start timer when going to background if we have time
-        if (this.availableTime > 0) {
-          console.log('Starting timer as app goes to background');
-          BrainBitesTimer.startTracking();
-        }
-      }
+
+  private handleAppStateChange(nextAppState: AppStateStatus): void {
+    // Notify native module of app state
+    if (nextAppState === 'active') {
+      BrainBitesTimer.notifyAppState('app_foreground');
+    } else if (nextAppState === 'background') {
+      BrainBitesTimer.notifyAppState('app_background');
     }
   }
-  
-  async loadSavedTime(): Promise<number> {
+
+  async addTimeCredits(seconds: number): Promise<void> {
     try {
-      if (this.useNativeTimer && BrainBitesTimer) {
-        // Get time from native service
-        const time = await BrainBitesTimer.getRemainingTime();
-        this.availableTime = time;
-        console.log('Loaded time from native:', time);
-        
-        // Start timer if we have time
-        if (time > 0) {
-          BrainBitesTimer.startTracking();
-        }
-      } else {
-        // Fallback to AsyncStorage
-        const data = await AsyncStorage.getItem(this.STORAGE_KEY);
-        if (data) {
-          const parsedData = JSON.parse(data);
-          this.availableTime = parsedData.availableTime || 0;
-        }
+      if (!BrainBitesTimer) {
+        console.error('Timer module not available');
+        return;
       }
       
-      console.log('Loaded available time:', this.availableTime);
-      this._notifyListeners('timeLoaded', { availableTime: this.availableTime });
-      this.isInitialized = true;
-      return this.availableTime;
+      // If we have debt time, reduce it first
+      if (this.debtTime > 0) {
+        const remainingCredits = seconds - this.debtTime;
+        if (remainingCredits > 0) {
+          // Paid off debt, add remaining time
+          this.debtTime = 0;
+          await BrainBitesTimer.addTime(remainingCredits);
+        } else {
+          // Reduced debt
+          this.debtTime -= seconds;
+        }
+        await this.saveDebtTime();
+      } else {
+        // No debt, add time directly
+        await BrainBitesTimer.addTime(seconds);
+      }
+      
+      console.log(`Added ${seconds} seconds of time credit`);
     } catch (error) {
-      console.error('Error loading saved time:', error);
+      console.error('Failed to add time credits:', error);
+    }
+  }
+
+  async setTime(seconds: number): Promise<void> {
+    try {
+      if (!BrainBitesTimer) {
+        console.error('Timer module not available');
+        return;
+      }
+      
+      await BrainBitesTimer.setScreenTime(seconds);
+      this.currentTime = seconds;
+      
+      // Clear debt if setting positive time
+      if (seconds > 0) {
+        this.debtTime = 0;
+        await this.saveDebtTime();
+      }
+      
+      console.log(`Set timer to ${seconds} seconds`);
+    } catch (error) {
+      console.error('Failed to set time:', error);
+    }
+  }
+
+  async startTracking(): Promise<void> {
+    try {
+      if (!BrainBitesTimer) return;
+      await BrainBitesTimer.startTracking();
+      this.isTracking = true;
+    } catch (error) {
+      console.error('Failed to start tracking:', error);
+    }
+  }
+
+  async stopTracking(): Promise<void> {
+    try {
+      if (!BrainBitesTimer) return;
+      await BrainBitesTimer.stopTracking();
+      this.isTracking = false;
+    } catch (error) {
+      console.error('Failed to stop tracking:', error);
+    }
+  }
+
+  async getRemainingTime(): Promise<number> {
+    try {
+      if (!BrainBitesTimer) return 0;
+      const time = await BrainBitesTimer.getRemainingTime();
+      return time;
+    } catch (error) {
+      console.error('Failed to get remaining time:', error);
       return 0;
     }
   }
-  
-  private async saveTimeData() {
+
+  private async loadDebtTime(): Promise<void> {
     try {
-      if (!this.useNativeTimer) {
-        // Only save to AsyncStorage if not using native timer
-        const data = {
-          availableTime: this.availableTime,
-          lastUpdated: new Date().toISOString()
-        };
-        await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
+      const saved = await AsyncStorage.getItem(this.STORAGE_KEYS.DEBT_TIME);
+      if (saved) {
+        this.debtTime = parseInt(saved, 10) || 0;
       }
-      // Native timer saves automatically
     } catch (error) {
-      console.error('Error saving time data:', error);
+      console.error('Failed to load debt time:', error);
     }
-  }
-  
-  async startTracking() {
-    if (this.isBrainBitesActive) return;
-    
-    if (this.useNativeTimer && BrainBitesTimer) {
-      BrainBitesTimer.startTracking();
-    } else {
-      // JavaScript fallback implementation would go here
-    }
-    
-    // Start session tracking
-    this.sessionStartTime = Date.now();
-    this.lastActiveTime = Date.now();
-    this.isTrackingSession = true;
   }
 
-  async stopTracking() {
-    if (this.useNativeTimer && BrainBitesTimer) {
-      BrainBitesTimer.stopTracking();
-    } else {
-      // JavaScript fallback implementation would go here
+  private async saveDebtTime(): Promise<void> {
+    try {
+      await AsyncStorage.setItem(
+        this.STORAGE_KEYS.DEBT_TIME, 
+        this.debtTime.toString()
+      );
+    } catch (error) {
+      console.error('Failed to save debt time:', error);
     }
-    
-    // Calculate final session time
-    const sessionDuration = (Date.now() - this.sessionStartTime) / 1000;
-    this.totalSessionTime += sessionDuration;
-    this.isTrackingSession = false;
   }
 
-  async addTimeCredits(seconds: number) {
-    if (this.useNativeTimer && BrainBitesTimer) {
-      await BrainBitesTimer.addTime(seconds);
-      // Get updated time from native service
-      this.availableTime = await BrainBitesTimer.getRemainingTime();
-    } else {
-      this.availableTime += seconds;
-      await this.saveTimeData();
-    }
-
-    console.log(`Added ${seconds}s. New available time: ${this.availableTime}`);
-    this._notifyListeners('creditsAdded', { seconds, newTotal: this.availableTime });
-  }
-
-  async addTime(seconds: number) {
-    const previousTime = this.availableTime;
-    this.availableTime += seconds;
-    
-    if (this.useNativeTimer && BrainBitesTimer) {
-      BrainBitesTimer.updateTime(this.availableTime);
-    } else {
-      await this.saveTimeData();
-    }
-    
-    this._notifyListeners('timeUpdate', {
-      remaining: this.availableTime,
-      isTracking: !this.isBrainBitesActive && this.availableTime > 0
-    });
-  }
-
-  async deductTime(seconds: number) {
-    const previousTime = this.availableTime;
-    this.availableTime = Math.max(0, this.availableTime - seconds);
-    
-    if (this.useNativeTimer && BrainBitesTimer) {
-      BrainBitesTimer.updateTime(this.availableTime);
-    } else {
-      await this.saveTimeData();
-    }
-    
-    this._notifyListeners('timeUpdate', {
-      remaining: this.availableTime,
-      isTracking: !this.isBrainBitesActive && this.availableTime > 0
-    });
-  }
-  
-  getAvailableTime(): number {
-    return this.availableTime;
-  }
-  
-  static formatTime(seconds: number): string {
-    if (seconds < 0) seconds = 0;
-    
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = seconds % 60;
-    
-    if (hours > 0) {
-      return `${hours}:${minutes < 10 ? '0' : ''}${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
-    } else {
-      return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
-    }
-  }
-  
+  // Format time for display (handles negative time)
   formatTime(seconds: number): string {
-    return EnhancedTimerService.formatTime(seconds);
-  }
-  
-  addEventListener(callback: TimerListener): () => void {
-    this.listeners.push(callback);
+    const isNegative = seconds < 0;
+    const absSeconds = Math.abs(seconds);
     
-    // Immediately send current state
-    callback({
-      event: 'timeUpdate',
-      remaining: this.availableTime,
-      isTracking: !this.isBrainBitesActive && this.availableTime > 0
+    const hours = Math.floor(absSeconds / 3600);
+    const minutes = Math.floor((absSeconds % 3600) / 60);
+    const secs = absSeconds % 60;
+    
+    let formatted = '';
+    if (hours > 0) {
+      formatted = `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    } else {
+      formatted = `${minutes}:${secs.toString().padStart(2, '0')}`;
+    }
+    
+    return isNegative ? `-${formatted}` : formatted;
+  }
+
+  // Subscribe to timer updates
+  subscribe(listener: TimerListener): () => void {
+    this.listeners.push(listener);
+    
+    // Send current state immediately
+    listener({
+      remainingTime: this.currentTime,
+      isTracking: this.isTracking,
+      debtTime: this.debtTime,
+      isAppForeground: false
     });
     
+    // Return unsubscribe function
     return () => {
-      this.listeners = this.listeners.filter(listener => listener !== callback);
+      this.listeners = this.listeners.filter(l => l !== listener);
     };
   }
-  
-  private _notifyListeners(event: string, data: any = {}) {
+
+  private notifyListeners(data: TimerUpdateData): void {
     this.listeners.forEach(listener => {
-      listener({ event, ...data });
+      try {
+        listener(data);
+      } catch (error) {
+        console.error('Timer listener error:', error);
+      }
     });
   }
-  
-  getTrackingStatus(): TrackingStatus {
-    return {
-      isTracking: !this.isBrainBitesActive && this.availableTime > 0,
-      isBrainBitesActive: this.isBrainBitesActive,
-      appState: this.appState,
-      availableTime: this.availableTime
-    };
+
+  // Calculate point deduction for debt time
+  getDebtPenalty(): number {
+    // -10 points per minute of debt
+    return Math.floor(this.debtTime / 60) * 10;
   }
-  
-  getDebugInfo(): DebugInfo {
-    return {
-      availableTime: this.availableTime,
-      formattedTime: this.formatTime(this.availableTime),
-      isRunning: !this.isBrainBitesActive,
-      isBrainBitesActive: this.isBrainBitesActive,
-      appState: this.appState,
-      useNativeTimer: this.useNativeTimer,
-      hasTimer: !!BrainBitesTimer
-    };
-  }
-  
-  // For testing
-  forceStartTracking() {
-    if (this.useNativeTimer && BrainBitesTimer) {
-      BrainBitesTimer.startTracking();
+
+  cleanup(): void {
+    if (this.timerUpdateSubscription) {
+      this.timerUpdateSubscription.remove();
     }
-  }
-  
-  forceStopTracking() {
-    if (this.useNativeTimer && BrainBitesTimer) {
-      BrainBitesTimer.stopTracking();
+    
+    if (this.appStateSubscription) {
+      this.appStateSubscription.remove();
     }
-  }
-  
-  cleanup() {
-    this.appStateSubscription?.remove();
-    this.subscription?.remove(); // For DeviceEventEmitter
-    if (this.useNativeTimer && BrainBitesTimer) {
+    
+    if (BrainBitesTimer && BrainBitesTimer.stopListening) {
       BrainBitesTimer.stopListening();
     }
+    
+    this.listeners = [];
+    this.isInitialized = false;
   }
 }
 
-const enhancedTimerService = new EnhancedTimerService();
-export default enhancedTimerService;
+export default new EnhancedTimerService();

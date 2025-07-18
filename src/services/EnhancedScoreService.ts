@@ -1,492 +1,308 @@
-// src/services/EnhancedScoreService.ts
+// src/services/EnhancedScoreService.ts - TypeScript version with daily goals tracking
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// Scoring constants
-const SCORE_BASE = 100;                  // Base score for a correct answer
-const STREAK_MULTIPLIER = 0.5;           // +50% per streak level
-const TIME_MULTIPLIER = 1.5;             // Maximum +50% for fast answers
-const STREAK_MILESTONE = 5;              // Streak milestone
-const MILESTONE_BONUS = 500;             // Bonus for streak milestone
-
-// Time management constants
-const OVERTIME_PENALTY_PER_MINUTE = 50;  // Lose 50 points per minute over limit
-const ROLLOVER_BONUS_PER_MINUTE = 10;    // Gain 10 points per unused minute
-const MAX_ROLLOVER_MINUTES = 120;        // Cap rollover at 2 hours
-const PENALTY_TICK_INTERVAL = 10000;     // Check every 10 seconds
-
-interface ScoreEventData {
-  event: string;
-  [key: string]: any;
-}
-
-interface ScoreListener {
-  (data: ScoreEventData): void;
-}
+import { UserStats } from '../types';
 
 interface ScoreInfo {
+  dailyScore: number;
   currentStreak: number;
   highestStreak: number;
-  sessionScore: number;
-  dailyScore: number;
-  yesterdayScore: number;
-  dailyRolloverBonus: number;
-  overtimePenalty: number;
-  allTimeHighScore: number;
-  totalDaysPlayed: number;
-  weeklyScores: Array<{date: string; score: number; streak: number}>;
-  weeklyTotal: number;
-  weeklyAverage: number;
-  monthlyTotal: number;
-  totalScore: number;
   streakLevel: number;
-  nextMilestone: number;
-  progress: number;
-  hoursOvertime: number;
-  minutesOvertime: number;
+  totalQuestions: number;
+  correctAnswers: number;
+  accuracy: number;
+  questionsToday: number;
 }
 
-interface DetailedScoreInfo extends ScoreInfo {
-  // Add any additional properties for detailed view
-}
-
-interface AnswerContext {
-  startTime: number;
-  category: string;
-}
-
-interface AnswerResult {
+interface ScoreResult {
   pointsEarned: number;
-  newStreak: number;
   newScore: number;
+  newStreak: number;
+  streakLevel: number;
   isMilestone: boolean;
-  streakLevel?: number;
+}
+
+interface AnswerMetadata {
+  startTime?: number;
+  category?: string;
+  difficulty?: 'easy' | 'medium' | 'hard';
+}
+
+interface TodayStats {
+  totalQuestions: number;
+  correctAnswers: number;
+  categoryCounts: Record<string, number>;
+  difficultyCounts: Record<string, number>;
+  date: string;
+  accuracy: number;
 }
 
 class EnhancedScoreService {
-  // Score properties - these reset daily
   private currentStreak: number = 0;
+  private dailyScore: number = 0;
   private highestStreak: number = 0;
-  private dailyScore: number = 0;              // Today's score (resets at midnight)
-  private yesterdayScore: number = 0;          // Yesterday's final score
-  private allTimeHighScore: number = 0;        // Best daily score ever
-  private totalDaysPlayed: number = 0;         // Total days with activity
+  private totalQuestionsAnswered: number = 0;
+  private correctAnswers: number = 0;
+  private streakLevel: number = 0;
+  private questionStartTime: number | null = null;
   
-  // Session tracking
-  private sessionScore: number = 0;
-  private streakMilestones: number[] = [];
-  private questionStartTime: number = 0;
-  
-  // Time management
-  private overtimePenalty: number = 0;
-  private dailyRolloverBonus: number = 0;
-  private lastPenaltyCheck: number = Date.now();
-  private penaltyCheckInterval: NodeJS.Timeout | null = null;
-  private currentDate: string = new Date().toDateString();
-  
-  // Weekly tracking
-  private weeklyScores: Array<{date: string; score: number; streak: number}> = [];
-  private monthlyTotal: number = 0;
-  
-  // Persistence
-  private isLoaded: boolean = false;
-  private dailyResetCheckInterval: NodeJS.Timeout | null = null;
+  // Daily tracking
+  private todayStats: TodayStats = {
+    totalQuestions: 0,
+    correctAnswers: 0,
+    categoryCounts: {},
+    difficultyCounts: {},
+    date: new Date().toDateString(),
+    accuracy: 0
+  };
   
   // Storage keys
   private readonly STORAGE_KEYS = {
-    DAILY_SCORE: 'brainbites_daily_score',
-    SCORE_HISTORY: 'brainbites_score_history',
-    TIME_MANAGEMENT: 'brainbites_time_management'
+    DAILY_SCORE: '@BrainBites:dailyScore',
+    CURRENT_STREAK: '@BrainBites:currentStreak', 
+    HIGHEST_STREAK: '@BrainBites:highestStreak',
+    TOTAL_QUESTIONS: '@BrainBites:totalQuestions',
+    CORRECT_ANSWERS: '@BrainBites:correctAnswers',
+    DAILY_STATS: '@BrainBites:dailyStats',
+    LAST_RESET: '@BrainBites:lastReset'
   };
-  
-  // Event listeners
-  private listeners: ScoreListener[] = [];
-  
-  constructor() {
-    // Start monitoring
-    this.startOvertimeMonitoring();
-    this.startDailyResetMonitoring();
-  }
-  
-  async loadSavedData() {
-    if (this.isLoaded) return;
-    
+
+  async loadSavedData(): Promise<void> {
     try {
-      // Check for daily reset first
+      // Check if we need to reset daily data
       await this.checkDailyReset();
       
-      // Load daily score data
-      const dailyData = await AsyncStorage.getItem(this.STORAGE_KEYS.DAILY_SCORE);
-      if (dailyData) {
-        const parsed = JSON.parse(dailyData);
-        
-        // Only load if it's still the same day
-        if (parsed.date === this.currentDate) {
-          this.dailyScore = parsed.dailyScore || 0;
-          this.currentStreak = parsed.currentStreak || 0;
-          this.highestStreak = parsed.highestStreak || 0;
-          this.overtimePenalty = parsed.overtimePenalty || 0;
-        }
+      // Load all saved data
+      const [
+        savedScore,
+        savedStreak, 
+        savedHighest,
+        savedTotal,
+        savedCorrect,
+        savedDailyStats
+      ] = await Promise.all([
+        AsyncStorage.getItem(this.STORAGE_KEYS.DAILY_SCORE),
+        AsyncStorage.getItem(this.STORAGE_KEYS.CURRENT_STREAK),
+        AsyncStorage.getItem(this.STORAGE_KEYS.HIGHEST_STREAK),
+        AsyncStorage.getItem(this.STORAGE_KEYS.TOTAL_QUESTIONS),
+        AsyncStorage.getItem(this.STORAGE_KEYS.CORRECT_ANSWERS),
+        AsyncStorage.getItem(this.STORAGE_KEYS.DAILY_STATS)
+      ]);
+      
+      this.dailyScore = savedScore ? parseInt(savedScore, 10) : 0;
+      this.currentStreak = savedStreak ? parseInt(savedStreak, 10) : 0;
+      this.highestStreak = savedHighest ? parseInt(savedHighest, 10) : 0;
+      this.totalQuestionsAnswered = savedTotal ? parseInt(savedTotal, 10) : 0;
+      this.correctAnswers = savedCorrect ? parseInt(savedCorrect, 10) : 0;
+      
+      if (savedDailyStats) {
+        this.todayStats = JSON.parse(savedDailyStats);
       }
       
-      // Load score history
-      const historyData = await AsyncStorage.getItem(this.STORAGE_KEYS.SCORE_HISTORY);
-      if (historyData) {
-        const history = JSON.parse(historyData);
-        this.allTimeHighScore = history.allTimeHighScore || 0;
-        this.totalDaysPlayed = history.totalDaysPlayed || 0;
-        this.weeklyScores = history.weeklyScores || [];
-        this.monthlyTotal = history.monthlyTotal || 0;
-        this.yesterdayScore = history.yesterdayScore || 0;
-      }
-      
-      this.resetSession();
-      this.isLoaded = true;
-      
-      return {
-        dailyScore: this.dailyScore,
-        highestStreak: this.highestStreak,
-        allTimeHighScore: this.allTimeHighScore
-      };
+      this.calculateStreakLevel();
     } catch (error) {
-      console.error('Error loading score data:', error);
-      return null;
+      console.error('Failed to load score data:', error);
     }
   }
-  
-  private startDailyResetMonitoring() {
-    // Check every minute for midnight
-    if (this.dailyResetCheckInterval) {
-      clearInterval(this.dailyResetCheckInterval);
-    }
+
+  private async checkDailyReset(): Promise<void> {
+    const today = new Date().toDateString();
+    const lastReset = await AsyncStorage.getItem(this.STORAGE_KEYS.LAST_RESET);
     
-    this.dailyResetCheckInterval = setInterval(() => {
-      this.checkDailyReset();
-    }, 60000); // Every minute
-  }
-  
-  private async checkDailyReset() {
-    const now = new Date();
-    const todayString = now.toDateString();
-    
-    if (this.currentDate !== todayString) {
-      console.log('🌅 New day detected! Performing daily reset...');
+    if (lastReset !== today) {
+      // Reset daily data
+      this.dailyScore = 0;
+      this.todayStats = {
+        totalQuestions: 0,
+        correctAnswers: 0,
+        categoryCounts: {},
+        difficultyCounts: {},
+        date: today,
+        accuracy: 0
+      };
       
-      // It's a new day! Perform daily reset
-      await this.performDailyReset();
-      
-      this.currentDate = todayString;
+      await AsyncStorage.setItem(this.STORAGE_KEYS.LAST_RESET, today);
+      await this.saveData();
     }
   }
-  
-  private async performDailyReset() {
-    // Save yesterday's score
-    this.yesterdayScore = this.dailyScore;
-    
-    // Update history before reset
-    await this.updateScoreHistory();
-    
-    // Calculate rollover bonus from remaining time
-    // NOTE: This would need to be integrated with TimerService
-    let rolloverBonus = 0;
-    
-    // Check if beat personal best
-    const wasNewRecord = this.dailyScore > this.allTimeHighScore;
-    if (wasNewRecord) {
-      this.allTimeHighScore = this.dailyScore;
-    }
-    
-    // Reset daily values
-    this.dailyScore = rolloverBonus; // Start new day with rollover bonus
-    this.dailyRolloverBonus = rolloverBonus;
-    this.currentStreak = 0;
-    this.sessionScore = 0;
-    this.overtimePenalty = 0;
-    
-    // Increment days played if yesterday had activity
-    if (this.yesterdayScore > 0) {
-      this.totalDaysPlayed++;
-    }
-    
-    // Save the reset state
-    await this.saveData();
-    
-    // Notify listeners about the reset
-    this._notifyListeners('dailyReset', {
-      yesterdayScore: this.yesterdayScore,
-      rolloverBonus: rolloverBonus,
-      rolloverMinutes: 0, // Would be calculated from timer service
-      wasNewRecord: wasNewRecord,
-      newDayScore: this.dailyScore,
-      totalDaysPlayed: this.totalDaysPlayed
-    });
-  }
-  
-  private async updateScoreHistory() {
-    // Add yesterday's score to weekly history
-    this.weeklyScores.push({
-      date: this.currentDate,
-      score: this.dailyScore,
-      streak: this.highestStreak
-    });
-    
-    // Keep only last 7 days
-    if (this.weeklyScores.length > 7) {
-      this.weeklyScores.shift();
-    }
-    
-    // Update monthly total
-    const currentMonth = new Date().getMonth();
-    const historyMonth = this.weeklyScores[0]?.date ? new Date(this.weeklyScores[0].date).getMonth() : currentMonth;
-    
-    if (currentMonth !== historyMonth) {
-      // New month, reset monthly total
-      this.monthlyTotal = this.dailyScore;
-    } else {
-      // Same month, add to total
-      this.monthlyTotal = this.weeklyScores.reduce((sum, day) => sum + day.score, 0);
-    }
-  }
-  
-  private async saveData() {
+
+  private async saveData(): Promise<void> {
     try {
-      // Save daily data
-      const dailyData = {
-        date: this.currentDate,
-        dailyScore: this.dailyScore,
-        currentStreak: this.currentStreak,
-        highestStreak: this.highestStreak,
-        overtimePenalty: this.overtimePenalty,
-        lastUpdated: new Date().toISOString()
-      };
-      
-      await AsyncStorage.setItem(this.STORAGE_KEYS.DAILY_SCORE, JSON.stringify(dailyData));
-      
-      // Save history
-      const historyData = {
-        allTimeHighScore: this.allTimeHighScore,
-        totalDaysPlayed: this.totalDaysPlayed,
-        weeklyScores: this.weeklyScores,
-        monthlyTotal: this.monthlyTotal,
-        yesterdayScore: this.yesterdayScore,
-        lastUpdated: new Date().toISOString()
-      };
-      
-      await AsyncStorage.setItem(this.STORAGE_KEYS.SCORE_HISTORY, JSON.stringify(historyData));
-      
+      await Promise.all([
+        AsyncStorage.setItem(this.STORAGE_KEYS.DAILY_SCORE, this.dailyScore.toString()),
+        AsyncStorage.setItem(this.STORAGE_KEYS.CURRENT_STREAK, this.currentStreak.toString()),
+        AsyncStorage.setItem(this.STORAGE_KEYS.HIGHEST_STREAK, this.highestStreak.toString()),
+        AsyncStorage.setItem(this.STORAGE_KEYS.TOTAL_QUESTIONS, this.totalQuestionsAnswered.toString()),
+        AsyncStorage.setItem(this.STORAGE_KEYS.CORRECT_ANSWERS, this.correctAnswers.toString()),
+        AsyncStorage.setItem(this.STORAGE_KEYS.DAILY_STATS, JSON.stringify(this.todayStats))
+      ]);
     } catch (error) {
-      console.error('Error saving score data:', error);
+      console.error('Failed to save score data:', error);
     }
   }
-  
-  // Overtime monitoring methods
-  private startOvertimeMonitoring() {
-    if (this.penaltyCheckInterval) {
-      clearInterval(this.penaltyCheckInterval);
-    }
-    
-    this.penaltyCheckInterval = setInterval(() => {
-      this.checkAndApplyPenalties();
-    }, PENALTY_TICK_INTERVAL);
-  }
-  
-  private async checkAndApplyPenalties() {
-    // This would need to be integrated with TimerService
-    // For now, this is a placeholder structure
-    const availableTime = 0; // Would get from TimerService
-    const isBrainBitesActive = true; // Would get from TimerService
-    
-    // Only apply penalties when time is expired AND user is actively using other apps
-    if (availableTime <= 0 && !isBrainBitesActive) {
-      
-      // Show warning if this is the first time going into overtime
-      if (!this.lastPenaltyCheck) {
-        this.showTimeExpiredWarning();
-        this.lastPenaltyCheck = Date.now();
-        return; // Give 30-second grace period
-      }
-      
-      const now = Date.now();
-      const overtimeSeconds = Math.floor((now - this.lastPenaltyCheck) / 1000);
-      
-      // Apply penalty after 30-second grace period
-      if (overtimeSeconds >= 30) {
-        const overtimeMinutes = overtimeSeconds / 60;
-        const penalty = Math.floor(overtimeMinutes * OVERTIME_PENALTY_PER_MINUTE);
-        
-        if (penalty > 0) {
-          const oldPenaltyTotal = this.overtimePenalty;
-          
-          // THIS IS THE ONLY PLACE SCORES CAN GO NEGATIVE
-          this.dailyScore = Math.max(-9999, this.dailyScore - penalty);
-          this.overtimePenalty += penalty;
-          
-          console.log(`Applied overtime penalty: -${penalty} points (${overtimeMinutes.toFixed(1)} minutes overtime). Total penalty: ${this.overtimePenalty}`);
-          
-          this.lastPenaltyCheck = now;
-          await this.saveData();
-          
-          this._notifyListeners('penaltyApplied', {
-            penalty,
-            overtimeMinutes: Math.floor(overtimeMinutes),
-            dailyScore: this.dailyScore,
-            totalPenalty: this.overtimePenalty
-          });
-        }
-      }
-    } else if (availableTime > 0) {
-      // Reset penalty tracking when user has time again
-      this.lastPenaltyCheck = 0;
-    }
-  }
-  
-  private showTimeExpiredWarning() {
-    this._notifyListeners('showMessage', {
-      type: 'timeExpiredWarning',
-      message: `⏰ Time's Up!\n\nYour earned screen time has run out. You'll now start losing points for continued app usage.\n\n💡 Quick solution: Answer a few quiz questions to earn more time and stop the penalty!\n\nCurrent score: ${this.dailyScore}`,
-      priority: 'high',
-      duration: 8000
-    });
-  }
-  
-  // Question answering methods
-  startQuestionTimer() {
+
+  startQuestionTimer(): void {
     this.questionStartTime = Date.now();
   }
-  
-  recordAnswer(isCorrect: boolean, context: AnswerContext): AnswerResult {
-    if (isCorrect) {
-      // Calculate time bonus
-      const timeTaken = (Date.now() - context.startTime) / 1000; // in seconds
-      const timeBonus = Math.max(0, (20 - timeTaken) / 20) * (SCORE_BASE * (TIME_MULTIPLIER - 1));
-      
-      // Calculate streak bonus
-      const streakBonus = this.currentStreak * (SCORE_BASE * STREAK_MULTIPLIER);
-      
-      // Total points for this answer
-      const points = Math.round(SCORE_BASE + timeBonus + streakBonus);
-      
-      this.updateScore(points, true, context.category);
-      
-      return {
-        pointsEarned: points,
-        newStreak: this.currentStreak,
-        newScore: this.dailyScore,
-        isMilestone: this.currentStreak > 0 && this.currentStreak % STREAK_MILESTONE === 0,
-        streakLevel: Math.floor(this.currentStreak / STREAK_MILESTONE)
-      };
-    } else {
-      // Incorrect answer - NO POINTS DEDUCTED, just reset streak
-      this.updateScore(0, false, context.category);
-      return {
-        pointsEarned: 0,
-        newStreak: this.currentStreak,
-        newScore: this.dailyScore,
-        isMilestone: false,
-      };
-    }
-  }
-  
-  private async updateScore(points: number, isCorrect: boolean, category: string) {
-    const previousScore = this.dailyScore;
+
+  recordAnswer(isCorrect: boolean, metadata: AnswerMetadata = {}): ScoreResult {
+    const { startTime, category, difficulty } = metadata;
     
-    // Only add points for correct answers, never subtract for wrong answers
-    if (points > 0) {
-      this.dailyScore += points;
-      this.sessionScore += points;
+    // Update total questions
+    this.totalQuestionsAnswered++;
+    this.todayStats.totalQuestions++;
+    
+    // Update category count
+    if (category) {
+      this.todayStats.categoryCounts[category] = 
+        (this.todayStats.categoryCounts[category] || 0) + 1;
     }
     
-    // Handle streaks - only negative scores from OVERTIME should reset streaks
+    // Update difficulty count
+    if (difficulty) {
+      this.todayStats.difficultyCounts[difficulty] = 
+        (this.todayStats.difficultyCounts[difficulty] || 0) + 1;
+    }
+    
+    let pointsEarned = 0;
+    let isMilestone = false;
+    
     if (isCorrect) {
+      this.correctAnswers++;
+      this.todayStats.correctAnswers++;
+      
+      // Update streak
       this.currentStreak++;
       if (this.currentStreak > this.highestStreak) {
         this.highestStreak = this.currentStreak;
       }
+      
+      // Calculate base points
+      const basePoints = 100;
+      
+      // Time bonus (faster = more points)
+      const responseTime = startTime ? Date.now() - startTime : 10000;
+      const timeBonus = Math.max(0, Math.floor((20000 - responseTime) / 1000) * 5);
+      
+      // Streak bonus
+      const streakBonus = Math.floor(this.currentStreak / 5) * 50;
+      
+      // Difficulty bonus
+      let difficultyBonus = 0;
+      if (difficulty === 'medium') difficultyBonus = 25;
+      if (difficulty === 'hard') difficultyBonus = 50;
+      
+      pointsEarned = basePoints + timeBonus + streakBonus + difficultyBonus;
+      
+      // Check for milestone
+      if (this.currentStreak % 5 === 0 && this.currentStreak > 0) {
+        isMilestone = true;
+        pointsEarned += 200; // Milestone bonus
+      }
+      
+      this.dailyScore += pointsEarned;
     } else {
-      // Wrong answer resets streak but doesn't affect score
+      // Reset streak on wrong answer
       this.currentStreak = 0;
     }
     
-    await this.saveData();
-    this._notifyListeners('scoreUpdated', {
-      dailyScore: this.dailyScore,
-      sessionScore: this.sessionScore,
-      currentStreak: this.currentStreak,
-      highestStreak: this.highestStreak
-    });
+    // Apply debt penalty if timer is negative
+    const debtPenalty = this.getDebtPenalty();
+    if (debtPenalty > 0) {
+      this.dailyScore = Math.max(0, this.dailyScore - debtPenalty);
+    }
+    
+    // Update accuracy
+    this.todayStats.accuracy = this.todayStats.totalQuestions > 0
+      ? Math.round((this.todayStats.correctAnswers / this.todayStats.totalQuestions) * 100)
+      : 0;
+    
+    this.calculateStreakLevel();
+    this.saveData();
+    
+    return {
+      pointsEarned,
+      newScore: this.dailyScore,
+      newStreak: this.currentStreak,
+      streakLevel: this.streakLevel,
+      isMilestone
+    };
   }
-  
-  // Get score information
+
+  private calculateStreakLevel(): void {
+    // Streak levels: 0-4, 5-9, 10-14, 15-19, 20+
+    if (this.currentStreak >= 20) this.streakLevel = 5;
+    else if (this.currentStreak >= 15) this.streakLevel = 4;
+    else if (this.currentStreak >= 10) this.streakLevel = 3;
+    else if (this.currentStreak >= 5) this.streakLevel = 2;
+    else if (this.currentStreak > 0) this.streakLevel = 1;
+    else this.streakLevel = 0;
+  }
+
+  private getDebtPenalty(): number {
+    // Import from timer service if available
+    try {
+      const EnhancedTimerService = require('./EnhancedTimerService').default;
+      return EnhancedTimerService.getDebtPenalty();
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  endQuizSession(): void {
+    // Reset streak but keep score
+    this.currentStreak = 0;
+    this.calculateStreakLevel();
+    this.saveData();
+  }
+
   getScoreInfo(): ScoreInfo {
-    const weeklyTotal = this.weeklyScores.reduce((sum, day) => sum + day.score, 0);
-    const weeklyAverage = this.weeklyScores.length > 0 
-      ? Math.round(weeklyTotal / this.weeklyScores.length) 
+    const accuracy = this.totalQuestionsAnswered > 0 
+      ? Math.round((this.correctAnswers / this.totalQuestionsAnswered) * 100)
       : 0;
     
     return {
-      // Current values
+      dailyScore: this.dailyScore,
       currentStreak: this.currentStreak,
       highestStreak: this.highestStreak,
-      sessionScore: this.sessionScore,
-      
-      // Daily values
-      dailyScore: this.dailyScore,
-      yesterdayScore: this.yesterdayScore,
-      dailyRolloverBonus: this.dailyRolloverBonus,
-      overtimePenalty: this.overtimePenalty,
-      
-      // Historical values
-      allTimeHighScore: this.allTimeHighScore,
-      totalDaysPlayed: this.totalDaysPlayed,
-      weeklyScores: this.weeklyScores,
-      weeklyTotal: weeklyTotal,
-      weeklyAverage: weeklyAverage,
-      monthlyTotal: this.monthlyTotal,
-      
-      // For leaderboard - use daily score
-      totalScore: this.dailyScore,
-      
-      // Progress
-      streakLevel: Math.floor(this.currentStreak / STREAK_MILESTONE),
-      nextMilestone: (Math.floor(this.currentStreak / STREAK_MILESTONE) + 1) * STREAK_MILESTONE,
-      progress: this.currentStreak % STREAK_MILESTONE / STREAK_MILESTONE,
-      
-      // Time info
-      hoursOvertime: Math.floor(this.overtimePenalty / OVERTIME_PENALTY_PER_MINUTE / 60),
-      minutesOvertime: Math.floor(this.overtimePenalty / OVERTIME_PENALTY_PER_MINUTE) % 60
+      streakLevel: this.streakLevel,
+      totalQuestions: this.totalQuestionsAnswered,
+      correctAnswers: this.correctAnswers,
+      accuracy,
+      questionsToday: this.todayStats.totalQuestions
     };
   }
-  
-  getDetailedScoreInfo(): DetailedScoreInfo {
-    return this.getScoreInfo(); // For now, same as regular score info
+
+  async getTodayQuizStats(): Promise<TodayStats> {
+    // Ensure we have latest data
+    await this.checkDailyReset();
+    
+    return {
+      totalQuestions: this.todayStats.totalQuestions,
+      correctAnswers: this.todayStats.correctAnswers,
+      categoryCounts: this.todayStats.categoryCounts,
+      difficultyCounts: this.todayStats.difficultyCounts,
+      date: this.todayStats.date,
+      accuracy: this.todayStats.accuracy
+    };
   }
-  
-  resetSession() {
+
+  async resetAllData(): Promise<void> {
     this.currentStreak = 0;
-    this.sessionScore = 0;
-    this.streakMilestones = [];
-    this.questionStartTime = 0;
-  }
-  
-  addEventListener(callback: ScoreListener) {
-    this.listeners.push(callback);
-    return () => {
-      this.listeners = this.listeners.filter(listener => listener !== callback);
+    this.dailyScore = 0;
+    this.highestStreak = 0;
+    this.totalQuestionsAnswered = 0;
+    this.correctAnswers = 0;
+    this.streakLevel = 0;
+    this.todayStats = {
+      totalQuestions: 0,
+      correctAnswers: 0,
+      categoryCounts: {},
+      difficultyCounts: {},
+      date: new Date().toDateString(),
+      accuracy: 0
     };
-  }
-  
-  private _notifyListeners(event: string, data: any = {}) {
-    this.listeners.forEach(listener => {
-      listener({ event, ...data });
-    });
-  }
-  
-  cleanup() {
-    if (this.penaltyCheckInterval) {
-      clearInterval(this.penaltyCheckInterval);
-    }
-    if (this.dailyResetCheckInterval) {
-      clearInterval(this.dailyResetCheckInterval);
-    }
+    
+    await this.saveData();
   }
 }
 

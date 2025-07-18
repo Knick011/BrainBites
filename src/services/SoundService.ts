@@ -1,214 +1,342 @@
-import Sound from 'react-native-sound';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// src/services/SoundService.ts - Simplified version that handles library issues
+import { Platform } from 'react-native';
 
-// Enable playback in silence mode
-Sound.setCategory('Playback');
-
-interface SoundMap {
-  [key: string]: Sound | null;
+// Try to import Sound, but handle if it fails
+let Sound: any = null;
+try {
+  Sound = require('react-native-sound').default;
+  // Enable playback in silence mode (iOS)
+  if (Sound && typeof Sound.setCategory === 'function') {
+    Sound.setCategory('Playback');
+  }
+} catch (error) {
+  console.warn('react-native-sound not available, sounds will be disabled');
 }
 
-class SoundServiceClass {
-  private sounds: SoundMap = {};
-  private isSoundEnabled: boolean = true;
-  private isMusicEnabled: boolean = true;
-  private currentMusic: Sound | null = null;
-  private isInitialized: boolean = false;
+type SoundKey = 'buttonPress' | 'correct' | 'incorrect' | 'streak' | 'gameMusic' | 'menuMusic';
 
-  async init() {
-    console.log('Initializing SoundService');
+interface SoundFiles {
+  buttonPress: string;
+  correct: string;
+  incorrect: string;
+  streak: string;
+  gameMusic: string;
+  menuMusic: string;
+}
+
+interface PlayOptions {
+  volume?: number;
+}
+
+class SoundService {
+  private sounds: Record<string, any> = {};
+  private musicInstance: any = null;
+  private isMusicEnabled: boolean = true;
+  private isSoundEnabled: boolean = true;
+  private isInitialized: boolean = false;
+  
+  // Sound file names (without extension)
+  private readonly soundFiles: SoundFiles = {
+    buttonPress: 'buttonpress',
+    correct: 'correct',
+    incorrect: 'incorrect', 
+    streak: 'streak',
+    gameMusic: 'gamemusic',
+    menuMusic: 'menumusic'
+  };
+
+  async initialize(): Promise<void> {
+    if (this.isInitialized) return;
     
-    // Load preferences
-    const soundEnabled = await AsyncStorage.getItem('sound_enabled');
-    const musicEnabled = await AsyncStorage.getItem('music_enabled');
+    console.log('Initializing SoundService...');
     
-    this.isSoundEnabled = soundEnabled !== 'false';
-    this.isMusicEnabled = musicEnabled !== 'false';
+    // If Sound library is not available, just mark as initialized
+    if (!Sound) {
+      console.warn('Sound library not available, skipping sound initialization');
+      this.isInitialized = true;
+      return;
+    }
     
-    // Preload all sounds
-    await this.preloadSounds();
-    
-    this.isInitialized = true;
-    console.log('SoundService initialized successfully');
+    try {
+      // Preload all sounds
+      const loadPromises = Object.entries(this.soundFiles).map(([key, filename]) => {
+        return this.loadSound(key as SoundKey, filename);
+      });
+      
+      await Promise.all(loadPromises);
+      this.isInitialized = true;
+      console.log('SoundService initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize sounds:', error);
+      // Mark as initialized even if some sounds fail to load
+      this.isInitialized = true;
+      console.log('SoundService initialized with some sounds unavailable');
+    }
   }
 
-  private async preloadSounds() {
-    const soundFiles = [
-      { name: 'buttonpress', file: 'buttonpress.mp3' },
-      { name: 'correct', file: 'correct.mp3' },
-      { name: 'incorrect', file: 'incorrect.mp3' },
-      { name: 'streak', file: 'streak.mp3' },
-      { name: 'gamemusic', file: 'gamemusic.mp3' },
-      { name: 'menumusic', file: 'menumusic.mp3' },
-    ];
+  private loadSound(key: SoundKey, filename: string): Promise<any> {
+    return new Promise((resolve) => {
+      if (!Sound) {
+        console.warn(`Sound library not available, ${key} will be unavailable`);
+        resolve(null);
+        return;
+      }
 
-    const loadPromises = soundFiles.map(({ name, file }) => {
-      return new Promise<void>((resolve) => {
-        console.log(`Loading sound: ${file}`);
+      try {
+        // Add extension based on platform
+        const extension = Platform.OS === 'ios' ? '.m4a' : '.mp3';
+        const fullFilename = filename + extension;
         
-        const sound = new Sound(file, Sound.MAIN_BUNDLE, (error) => {
-          if (error) {
-            console.error(`Failed to load sound ${file}:`, error);
-            this.sounds[name] = null;
-            resolve();
-          } else {
-            console.log(`Successfully loaded sound: ${file}`);
-            this.sounds[name] = sound;
-            
-            // Set volume for music files
-            if (name === 'gamemusic' || name === 'menumusic') {
-              sound.setVolume(0.3); // Lower volume for background music
-              sound.setNumberOfLoops(-1); // Loop indefinitely
+        console.log(`Attempting to load sound: ${fullFilename}`);
+        
+        // Try to load sound with error handling
+        let sound: any = null;
+        
+        try {
+          sound = new Sound(fullFilename, Sound.MAIN_BUNDLE, (error: any) => {
+            if (error) {
+              console.error(`Failed to load sound ${fullFilename}:`, error);
+              console.warn(`Sound ${key} will be unavailable`);
+              resolve(null);
+              return;
             }
             
-            resolve();
-          }
-        });
-      });
-    });
-
-    await Promise.all(loadPromises);
-  }
-
-  private playSound(soundName: string, callback?: () => void) {
-    if (!this.isInitialized) {
-      console.warn('SoundService not initialized');
-      callback?.();
-      return;
-    }
-
-    if (!this.isSoundEnabled && soundName !== 'gamemusic' && soundName !== 'menumusic') {
-      callback?.();
-      return;
-    }
-
-    const sound = this.sounds[soundName];
-    if (!sound) {
-      console.warn(`Sound ${soundName} not loaded`);
-      callback?.();
-      return;
-    }
-
-    // Reset the sound to the beginning
-    sound.setCurrentTime(0);
-    
-    sound.play((success) => {
-      if (!success) {
-        console.error(`Sound ${soundName} playback failed`);
+            // Store the sound instance
+            this.sounds[key] = sound;
+            console.log(`Successfully loaded sound: ${key}`);
+            resolve(sound);
+          });
+        } catch (soundError) {
+          console.error(`Error creating sound ${key}:`, soundError);
+          console.warn(`Sound ${key} will be unavailable due to creation error`);
+          resolve(null);
+        }
+      } catch (error) {
+        console.error(`Error in loadSound for ${key}:`, error);
+        console.warn(`Sound ${key} will be unavailable due to general error`);
+        resolve(null);
       }
-      callback?.();
     });
   }
 
-  playButtonPress() {
-    this.playSound('buttonpress');
-  }
-
-  playCorrect() {
-    this.playSound('correct');
-  }
-
-  playIncorrect() {
-    this.playSound('incorrect');
-  }
-
-  playStreak() {
-    this.playSound('streak');
-  }
-
-  async playMenuMusic() {
-    if (!this.isMusicEnabled || !this.isInitialized) return;
-
-    // Stop any current music
-    await this.stopMusic();
-
-    const music = this.sounds['menumusic'];
-    if (music) {
-      this.currentMusic = music;
-      music.setCurrentTime(0);
-      music.setVolume(0.3);
-      music.setNumberOfLoops(-1);
-      
-      music.play((success) => {
-        if (!success) {
-          console.error('Menu music playback failed');
-          this.currentMusic = null;
-        } else {
-          console.log('Menu music started');
-        }
-      });
-    }
-  }
-
-  async playGameMusic() {
-    if (!this.isMusicEnabled || !this.isInitialized) return;
-
-    // Stop any current music
-    await this.stopMusic();
-
-    const music = this.sounds['gamemusic'];
-    if (music) {
-      this.currentMusic = music;
-      music.setCurrentTime(0);
-      music.setVolume(0.3);
-      music.setNumberOfLoops(-1);
-      
-      music.play((success) => {
-        if (!success) {
-          console.error('Game music playback failed');
-          this.currentMusic = null;
-        } else {
-          console.log('Game music started');
-        }
-      });
-    }
-  }
-
-  async stopMusic() {
-    if (this.currentMusic) {
-      this.currentMusic.stop(() => {
-        console.log('Music stopped');
-      });
-      this.currentMusic = null;
-    }
-  }
-
-  async setSoundEnabled(enabled: boolean) {
-    this.isSoundEnabled = enabled;
-    await AsyncStorage.setItem('sound_enabled', enabled ? 'true' : 'false');
-  }
-
-  async setMusicEnabled(enabled: boolean) {
-    this.isMusicEnabled = enabled;
-    await AsyncStorage.setItem('music_enabled', enabled ? 'true' : 'false');
+  private playSound(soundKey: SoundKey, options: PlayOptions = {}): void {
+    if (!this.isSoundEnabled || !Sound) return;
     
-    if (!enabled) {
-      await this.stopMusic();
+    const sound = this.sounds[soundKey];
+    if (!sound) {
+      console.warn(`Sound not found: ${soundKey}`);
+      return;
+    }
+    
+    try {
+      // Reset to beginning
+      sound.setCurrentTime(0);
+      
+      // Set volume if specified
+      if (options.volume !== undefined) {
+        sound.setVolume(options.volume);
+      }
+      
+      // Play the sound
+      sound.play((success: any) => {
+        if (!success) {
+          console.error(`Failed to play sound: ${soundKey}`);
+        }
+      });
+    } catch (error) {
+      console.error(`Error playing sound ${soundKey}:`, error);
     }
   }
 
-  isSoundEnabledStatus(): boolean {
+  // Public methods for specific sounds
+  playButtonPress(): void {
+    this.playSound('buttonPress', { volume: 0.5 });
+  }
+
+  playCorrect(): void {
+    this.playSound('correct', { volume: 0.7 });
+  }
+
+  playIncorrect(): void {
+    this.playSound('incorrect', { volume: 0.7 });
+  }
+
+  playStreak(): void {
+    this.playSound('streak', { volume: 0.8 });
+  }
+
+  // Alias methods for backward compatibility
+  playMenuMusic(): void {
+    this.startMenuMusic();
+  }
+
+  playGameMusic(): void {
+    this.startGameMusic();
+  }
+
+  // Additional methods for compatibility
+  playButtonClick(): void {
+    this.playButtonPress();
+  }
+
+  getSoundEnabled(): boolean {
     return this.isSoundEnabled;
   }
 
-  isMusicEnabledStatus(): boolean {
-    return this.isMusicEnabled;
+  getMusicVolume(): number {
+    return 0.3; // Default volume
   }
 
-  cleanup() {
-    // Stop all sounds and release resources
+  getEffectsVolume(): number {
+    return 0.5; // Default volume
+  }
+
+  setMusicVolume(volume: number): void {
+    // This would need to be implemented if you want to change music volume
+    console.log('Music volume set to:', volume);
+  }
+
+  setEffectsVolume(volume: number): void {
+    // This would need to be implemented if you want to change effects volume
+    console.log('Effects volume set to:', volume);
+  }
+
+  // Music management
+  async startGameMusic(): Promise<void> {
+    if (!this.isMusicEnabled || !Sound) return;
+    
+    // Stop any current music
     this.stopMusic();
     
-    Object.values(this.sounds).forEach(sound => {
-      if (sound) {
-        sound.release();
+    const music = this.sounds.gameMusic;
+    if (!music) {
+      console.warn('Game music not loaded');
+      return;
+    }
+    
+    try {
+      // Set to loop
+      music.setNumberOfLoops(-1);
+      music.setVolume(0.3);
+      music.setCurrentTime(0);
+      
+      // Play
+      music.play((success: any) => {
+        if (success) {
+          this.musicInstance = music;
+        } else {
+          console.error('Failed to play game music');
+        }
+      });
+    } catch (error) {
+      console.error('Error starting game music:', error);
+    }
+  }
+
+  async startMenuMusic(): Promise<void> {
+    if (!this.isMusicEnabled || !Sound) return;
+    
+    // Stop any current music
+    this.stopMusic();
+    
+    const music = this.sounds.menuMusic;
+    if (!music) {
+      console.warn('Menu music not loaded');
+      return;
+    }
+    
+    try {
+      // Set to loop
+      music.setNumberOfLoops(-1);
+      music.setVolume(0.3);
+      music.setCurrentTime(0);
+      
+      // Play
+      music.play((success: any) => {
+        if (success) {
+          this.musicInstance = music;
+        } else {
+          console.error('Failed to play menu music');
+        }
+      });
+    } catch (error) {
+      console.error('Error starting menu music:', error);
+    }
+  }
+
+  stopMusic(): void {
+    if (this.musicInstance && Sound) {
+      try {
+        this.musicInstance.stop();
+      } catch (error) {
+        console.error('Error stopping music:', error);
       }
-    });
+      this.musicInstance = null;
+    }
+  }
+
+  pauseMusic(): void {
+    if (this.musicInstance && Sound) {
+      try {
+        this.musicInstance.pause();
+      } catch (error) {
+        console.error('Error pausing music:', error);
+      }
+    }
+  }
+
+  resumeMusic(): void {
+    if (this.musicInstance && this.isMusicEnabled && Sound) {
+      try {
+        this.musicInstance.play();
+      } catch (error) {
+        console.error('Error resuming music:', error);
+      }
+    }
+  }
+
+  // Settings
+  setMusicEnabled(enabled: boolean): void {
+    this.isMusicEnabled = enabled;
+    if (!enabled) {
+      this.stopMusic();
+    }
+  }
+
+  setSoundEnabled(enabled: boolean): void {
+    this.isSoundEnabled = enabled;
+  }
+
+  // Cleanup
+  release(): void {
+    // Stop music
+    this.stopMusic();
+    
+    // Release all sounds
+    if (Sound) {
+      Object.values(this.sounds).forEach(sound => {
+        if (sound) {
+          try {
+            sound.release();
+          } catch (error) {
+            console.error('Error releasing sound:', error);
+          }
+        }
+      });
+    }
     
     this.sounds = {};
     this.isInitialized = false;
   }
 }
 
-const SoundService = new SoundServiceClass();
-export default SoundService;
+// Create singleton instance
+const soundService = new SoundService();
+
+// Auto-initialize when imported
+soundService.initialize().catch(error => {
+  console.error('Failed to auto-initialize SoundService:', error);
+  // Don't throw, just log the error and continue
+});
+
+export default soundService;

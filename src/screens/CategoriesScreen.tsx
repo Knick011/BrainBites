@@ -1,189 +1,178 @@
-import React, { useState } from 'react';
+// src/screens/CategoriesScreen.tsx
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
+  SafeAreaView,
   ScrollView,
-  Dimensions,
+  Animated,
+  Platform
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import LinearGradient from 'react-native-linear-gradient';
-import Icon from 'react-native-vector-icons/Ionicons';
-
-import { RootStackParamList } from '../../App';
-import { QuestionService, Category } from '../services/QuestionService';
+import { RootStackParamList, Category } from '../types';
+import theme from '../styles/theme';
 import SoundService from '../services/SoundService';
-import { logEvent } from '../config/Firebase';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = (SCREEN_WIDTH - 50) / 2;
+type NavigationProp = StackNavigationProp<RootStackParamList, 'Categories'>;
 
-type CategoriesScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Categories'>;
-type CategoriesScreenRouteProp = RouteProp<RootStackParamList, 'Categories'>;
+const CATEGORIES: Category[] = [
+  {
+    id: 'science',
+    name: 'Science',
+    icon: 'flask-outline',
+    color: '#4CAF50',
+    description: 'Physics, Chemistry, Biology',
+    questionCount: 0
+  },
+  {
+    id: 'history',
+    name: 'History', 
+    icon: 'book-clock-outline',
+    color: '#2196F3',
+    description: 'World events & civilizations',
+    questionCount: 0
+  },
+  {
+    id: 'math',
+    name: 'Math',
+    icon: 'calculator-variant-outline',
+    color: '#FF9800',
+    description: 'Numbers & calculations',
+    questionCount: 0
+  },
+  {
+    id: 'geography',
+    name: 'Geography',
+    icon: 'earth',
+    color: '#9C27B0',
+    description: 'Countries & capitals',
+    questionCount: 0
+  },
+  {
+    id: 'technology',
+    name: 'Technology',
+    icon: 'laptop',
+    color: '#00BCD4',
+    description: 'Computers & innovation',
+    questionCount: 0
+  },
+  {
+    id: 'funfacts',
+    name: 'Fun Facts',
+    icon: 'lightbulb-outline',
+    color: '#E91E63',
+    description: 'Interesting trivia',
+    questionCount: 0
+  }
+];
 
 const CategoriesScreen: React.FC = () => {
-  const navigation = useNavigation<CategoriesScreenNavigationProp>();
-  const route = useRoute<CategoriesScreenRouteProp>();
+  const navigation = useNavigation<NavigationProp>();
   
-  const [selectedDifficulty, setSelectedDifficulty] = useState<'easy' | 'medium' | 'hard'>(
-    route.params?.difficulty || 'medium'
-  );
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const cardAnims = useRef(CATEGORIES.map(() => new Animated.Value(0))).current;
   
-  const categories = QuestionService.getCategories();
-
-  const handleCategoryPress = (category: Category) => {
-    SoundService.playButtonPress();
-    logEvent('category_selected', { 
-      category: category.name, 
-      difficulty: selectedDifficulty 
-    });
+  useEffect(() => {
+    // Animate entrance
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
     
-    navigation.navigate('Quiz', {
-      category: category.name,
-      difficulty: selectedDifficulty,
-    });
+    // Stagger card animations
+    const animations = cardAnims.map((anim, index) => 
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 500,
+        delay: index * 100,
+        useNativeDriver: true,
+      })
+    );
+    
+    Animated.stagger(100, animations).start();
+  }, []);
+  
+  const handleCategorySelect = (category: Category) => {
+    SoundService.playButtonPress();
+    navigation.navigate('Quiz', { category: category.id });
   };
-
-  const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case 'easy':
-        return '#4CAF50';
-      case 'medium':
-        return '#FF9800';
-      case 'hard':
-        return '#F44336';
-      default:
-        return '#FF9800';
-    }
+  
+  const handleBack = () => {
+    SoundService.playButtonPress();
+    navigation.goBack();
   };
-
-  const getDifficultyIcon = (difficulty: string) => {
-    switch (difficulty) {
-      case 'easy':
-        return 'flash-outline';
-      case 'medium':
-        return 'flash';
-      case 'hard':
-        return 'flash-sharp';
-      default:
-        return 'flash';
-    }
-  };
-
+  
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <LinearGradient
-        colors={['#FFE5D9', '#FFD7C9', '#FFC9B9']}
-        style={styles.header}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+      <Animated.View 
+        style={[
+          styles.header,
+          { opacity: fadeAnim }
+        ]}
       >
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-          activeOpacity={0.7}
-        >
-          <Icon name="arrow-back" size={24} color="#4A4A4A" />
+        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+          <Icon name="arrow-left" size={24} color="#333" />
         </TouchableOpacity>
-        
         <Text style={styles.headerTitle}>Choose a Category</Text>
-        <View style={styles.placeholder} />
-      </LinearGradient>
-
-      {/* Difficulty Selector */}
-      <View style={styles.difficultyContainer}>
-        <Text style={styles.difficultyTitle}>Select Difficulty:</Text>
-        <View style={styles.difficultyButtons}>
-          {(['easy', 'medium', 'hard'] as const).map((difficulty) => (
-            <TouchableOpacity
-              key={difficulty}
+        <View style={{ width: 40 }} />
+      </Animated.View>
+      
+      <ScrollView 
+        contentContainerStyle={styles.gridContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.grid}>
+          {CATEGORIES.map((category, index) => (
+            <Animated.View
+              key={category.id}
               style={[
-                styles.difficultyButton,
-                selectedDifficulty === difficulty && {
-                  backgroundColor: getDifficultyColor(difficulty),
+                styles.categoryCardContainer,
+                {
+                  opacity: cardAnims[index],
+                  transform: [
+                    {
+                      translateY: cardAnims[index].interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [30, 0],
+                      }),
+                    },
+                    {
+                      scale: cardAnims[index].interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.8, 1],
+                      }),
+                    },
+                  ],
                 },
               ]}
-              onPress={() => {
-                setSelectedDifficulty(difficulty);
-                SoundService.playButtonPress();
-              }}
-              activeOpacity={0.8}
             >
-              <Icon
-                name={getDifficultyIcon(difficulty)}
-                size={20}
-                color={selectedDifficulty === difficulty ? 'white' : getDifficultyColor(difficulty)}
-              />
-              <Text
-                style={[
-                  styles.difficultyButtonText,
-                  selectedDifficulty === difficulty && styles.difficultyButtonTextActive,
-                ]}
+              <TouchableOpacity
+                style={styles.categoryCard}
+                onPress={() => handleCategorySelect(category)}
+                activeOpacity={0.8}
               >
-                {difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      {/* Mixed Category Card */}
-      <TouchableOpacity
-        style={styles.mixedCard}
-        onPress={() => {
-          SoundService.playButtonPress();
-          navigation.navigate('Quiz', { difficulty: selectedDifficulty });
-        }}
-        activeOpacity={0.8}
-      >
-        <LinearGradient
-          colors={['#A8E6CF', '#7FCDCD']}
-          style={styles.mixedGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <Text style={styles.mixedIcon}>🎲</Text>
-          <Text style={styles.mixedTitle}>Mixed Questions</Text>
-          <Text style={styles.mixedDescription}>
-            Challenge yourself with questions from all categories!
-          </Text>
-          <View style={styles.mixedBadge}>
-            <Text style={styles.mixedBadgeText}>RECOMMENDED</Text>
-          </View>
-        </LinearGradient>
-      </TouchableOpacity>
-
-      {/* Category Grid */}
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View style={styles.categoriesGrid}>
-          {categories.map((category) => (
-            <TouchableOpacity
-              key={category.id}
-              style={styles.categoryCard}
-              onPress={() => handleCategoryPress(category)}
-              activeOpacity={0.8}
-            >
-              <View
-                style={[
-                  styles.categoryIconContainer,
-                  { backgroundColor: category.color + '20' },
-                ]}
-              >
-                <Text style={styles.categoryIcon}>{category.icon}</Text>
-              </View>
-              <Text style={styles.categoryName}>{category.name}</Text>
-              <Text style={styles.categoryDescription} numberOfLines={2}>
-                {category.description}
-              </Text>
-              <View style={styles.categoryFooter}>
-                <Icon name="help-circle-outline" size={16} color="#6A6A6A" />
-                <Text style={styles.questionCount}>{category.questionCount} questions</Text>
-              </View>
-            </TouchableOpacity>
+                <View 
+                  style={[
+                    styles.iconContainer,
+                    { backgroundColor: category.color + '20' }
+                  ]}
+                >
+                  <Icon 
+                    name={category.icon} 
+                    size={32} 
+                    color={category.color} 
+                  />
+                </View>
+                <Text style={styles.categoryName}>{category.name}</Text>
+                <Text style={styles.categoryDescription}>{category.description}</Text>
+              </TouchableOpacity>
+            </Animated.View>
           ))}
         </View>
       </ScrollView>
@@ -194,155 +183,71 @@ const CategoriesScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAFAFA',
+    backgroundColor: theme.colors.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 20,
+    paddingVertical: 16,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
   backButton: {
-    padding: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f5f5f5',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 22,
-    fontFamily: 'Quicksand-Bold',
-    color: '#4A4A4A',
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
   },
-  placeholder: {
-    width: 40,
+  gridContainer: {
+    padding: 16,
   },
-  difficultyContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-  },
-  difficultyTitle: {
-    fontSize: 16,
-    fontFamily: 'Nunito-Bold',
-    color: '#4A4A4A',
-    marginBottom: 12,
-  },
-  difficultyButtons: {
+  grid: {
     flexDirection: 'row',
-    gap: 10,
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
   },
-  difficultyButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 12,
+  categoryCardContainer: {
+    width: '48%',
+    marginBottom: 16,
+  },
+  categoryCard: {
     backgroundColor: 'white',
-    borderWidth: 2,
-    borderColor: '#E0E0E0',
-    gap: 6,
-  },
-  difficultyButtonText: {
-    fontSize: 14,
-    fontFamily: 'Nunito-Bold',
-    color: '#6A6A6A',
-  },
-  difficultyButtonTextActive: {
-    color: 'white',
-  },
-  mixedCard: {
-    marginHorizontal: 20,
-    marginBottom: 20,
-  },
-  mixedGradient: {
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    ...theme.shadows.md,
   },
-  mixedIcon: {
-    fontSize: 48,
-    marginBottom: 10,
-  },
-  mixedTitle: {
-    fontSize: 20,
-    fontFamily: 'Quicksand-Bold',
-    color: 'white',
-    marginBottom: 8,
-  },
-  mixedDescription: {
-    fontSize: 14,
-    fontFamily: 'Nunito-Regular',
-    color: 'white',
-    textAlign: 'center',
-    opacity: 0.9,
-  },
-  mixedBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginTop: 10,
-  },
-  mixedBadgeText: {
-    fontSize: 11,
-    fontFamily: 'Nunito-Bold',
-    color: 'white',
-  },
-  categoriesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: 15,
-    paddingBottom: 20,
-  },
-  categoryCard: {
-    width: CARD_WIDTH,
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 16,
-    margin: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  categoryIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  iconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
-  categoryIcon: {
-    fontSize: 30,
-  },
   categoryName: {
     fontSize: 16,
-    fontFamily: 'Quicksand-Bold',
-    color: '#4A4A4A',
-    marginBottom: 6,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
   },
   categoryDescription: {
     fontSize: 12,
-    fontFamily: 'Nunito-Regular',
-    color: '#6A6A6A',
-    lineHeight: 18,
-    flex: 1,
-  },
-  categoryFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    gap: 4,
-  },
-  questionCount: {
-    fontSize: 12,
-    fontFamily: 'Nunito-Regular',
-    color: '#6A6A6A',
+    color: '#666',
+    textAlign: 'center',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'sans-serif',
   },
 });
 

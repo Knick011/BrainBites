@@ -1,330 +1,393 @@
 // src/services/QuestionService.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Question, Category } from '../types';
+import { questionsCSV } from '../assets/data/questionsData';
 
-export interface Question {
-  id: string;
-  category: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-  question: string;
-  options: string[];
+interface AnsweredQuestion {
+  correct: boolean;
+  timestamp: string;
+}
+
+interface QuestionStats {
+  total: number;
+  answered: number;
   correct: number;
-  explanation?: string;
+  incorrect: number;
+  remaining: number;
 }
 
-export interface Category {
-  id: string;
-  name: string;
-  icon: string;
-  color: string;
-  description: string;
-  questionCount: number;
-}
-
-// Sample questions - In production, these would come from an API or database
-const sampleQuestions: Question[] = [
-  // Science - Easy
+// Fallback questions if CSV loading fails
+const FALLBACK_QUESTIONS: Question[] = [
   {
-    id: 'sci_easy_1',
-    category: 'Science',
-    difficulty: 'easy',
-    question: 'What planet is known as the Red Planet?',
-    options: ['Venus', 'Mars', 'Jupiter', 'Saturn'],
-    correct: 1,
-    explanation: 'Mars is called the Red Planet due to iron oxide on its surface.',
+    id: 'q1',
+    category: 'science',
+    level: 'easy',
+    question: 'What is the largest planet in our solar system?',
+    optionA: 'Earth',
+    optionB: 'Mars',
+    optionC: 'Jupiter',
+    optionD: 'Saturn',
+    correctAnswer: 'C',
+    explanation: 'Jupiter is the largest planet in our solar system, with a diameter about 11 times that of Earth.'
   },
   {
-    id: 'sci_easy_2',
-    category: 'Science',
-    difficulty: 'easy',
-    question: 'How many legs does a spider have?',
-    options: ['6', '8', '10', '12'],
-    correct: 1,
-    explanation: 'All spiders have 8 legs, which distinguishes them from insects.',
-  },
-  
-  // Science - Medium
-  {
-    id: 'sci_med_1',
-    category: 'Science',
-    difficulty: 'medium',
-    question: 'What is the chemical symbol for gold?',
-    options: ['Go', 'Gd', 'Au', 'Ag'],
-    correct: 2,
-    explanation: 'Au comes from the Latin word "aurum" meaning gold.',
-  },
-  {
-    id: 'sci_med_2',
-    category: 'Science',
-    difficulty: 'medium',
-    question: 'What is the largest organ in the human body?',
-    options: ['Heart', 'Brain', 'Liver', 'Skin'],
-    correct: 3,
-    explanation: 'The skin is the largest organ, covering about 20 square feet in adults.',
-  },
-  
-  // Science - Hard
-  {
-    id: 'sci_hard_1',
-    category: 'Science',
-    difficulty: 'hard',
-    question: 'What is the speed of light in a vacuum?',
-    options: ['299,792,458 m/s', '300,000,000 m/s', '299,792,000 m/s', '298,792,458 m/s'],
-    correct: 0,
-    explanation: 'The speed of light in vacuum is exactly 299,792,458 meters per second.',
-  },
-  
-  // History - Easy
-  {
-    id: 'hist_easy_1',
-    category: 'History',
-    difficulty: 'easy',
-    question: 'Who was the first President of the United States?',
-    options: ['Thomas Jefferson', 'George Washington', 'John Adams', 'Benjamin Franklin'],
-    correct: 1,
-    explanation: 'George Washington served as the first U.S. President from 1789 to 1797.',
-  },
-  {
-    id: 'hist_easy_2',
-    category: 'History',
-    difficulty: 'easy',
+    id: 'q2',
+    category: 'history',
+    level: 'medium',
     question: 'In which year did World War II end?',
-    options: ['1943', '1944', '1945', '1946'],
-    correct: 2,
-    explanation: 'World War II ended in 1945 with the surrender of Japan.',
-  },
-  
-  // History - Medium
-  {
-    id: 'hist_med_1',
-    category: 'History',
-    difficulty: 'medium',
-    question: 'Which ancient wonder of the world still stands today?',
-    options: ['Colossus of Rhodes', 'Great Pyramid of Giza', 'Hanging Gardens', 'Lighthouse of Alexandria'],
-    correct: 1,
-    explanation: 'The Great Pyramid of Giza is the only ancient wonder still standing.',
-  },
-  
-  // Geography - Easy
-  {
-    id: 'geo_easy_1',
-    category: 'Geography',
-    difficulty: 'easy',
-    question: 'What is the capital of France?',
-    options: ['London', 'Berlin', 'Paris', 'Madrid'],
-    correct: 2,
-    explanation: 'Paris has been the capital of France for over 1,000 years.',
-  },
-  {
-    id: 'geo_easy_2',
-    category: 'Geography',
-    difficulty: 'easy',
-    question: 'Which ocean is the largest?',
-    options: ['Atlantic', 'Indian', 'Arctic', 'Pacific'],
-    correct: 3,
-    explanation: 'The Pacific Ocean covers about 63 million square miles.',
-  },
-  
-  // Math - Easy
-  {
-    id: 'math_easy_1',
-    category: 'Math',
-    difficulty: 'easy',
-    question: 'What is 15 × 4?',
-    options: ['45', '50', '60', '65'],
-    correct: 2,
-    explanation: '15 × 4 = 60',
-  },
-  {
-    id: 'math_easy_2',
-    category: 'Math',
-    difficulty: 'easy',
-    question: 'What is the value of π (pi) to two decimal places?',
-    options: ['3.12', '3.14', '3.16', '3.18'],
-    correct: 1,
-    explanation: 'Pi (π) is approximately 3.14159..., or 3.14 to two decimal places.',
-  },
-  
-  // Literature - Easy
-  {
-    id: 'lit_easy_1',
-    category: 'Literature',
-    difficulty: 'easy',
-    question: 'Who wrote "Romeo and Juliet"?',
-    options: ['Charles Dickens', 'William Shakespeare', 'Mark Twain', 'Jane Austen'],
-    correct: 1,
-    explanation: 'William Shakespeare wrote Romeo and Juliet around 1595.',
-  },
-  
-  // Technology - Easy
-  {
-    id: 'tech_easy_1',
-    category: 'Technology',
-    difficulty: 'easy',
-    question: 'What does "WWW" stand for?',
-    options: ['World Wide Web', 'World Wide Network', 'Web Wide World', 'Wide World Web'],
-    correct: 0,
-    explanation: 'WWW stands for World Wide Web, invented by Tim Berners-Lee.',
-  },
+    optionA: '1943',
+    optionB: '1944',
+    optionC: '1945',
+    optionD: '1946',
+    correctAnswer: 'C',
+    explanation: 'World War II ended in 1945 with the surrender of Japan on September 2, 1945.'
+  }
 ];
 
-const categories: Category[] = [
-  {
-    id: 'science',
-    name: 'Science',
-    icon: '🔬',
-    color: '#4CAF50',
-    description: 'Explore the wonders of the natural world',
-    questionCount: 50,
-  },
-  {
-    id: 'history',
-    name: 'History',
-    icon: '📚',
-    color: '#FF9800',
-    description: 'Journey through time and historical events',
-    questionCount: 45,
-  },
-  {
-    id: 'geography',
-    name: 'Geography',
-    icon: '🌍',
-    color: '#2196F3',
-    description: 'Discover places and cultures around the world',
-    questionCount: 40,
-  },
-  {
-    id: 'math',
-    name: 'Math',
-    icon: '🔢',
-    color: '#9C27B0',
-    description: 'Challenge your numerical and logical skills',
-    questionCount: 35,
-  },
-  {
-    id: 'literature',
-    name: 'Literature',
-    icon: '📖',
-    color: '#E91E63',
-    description: 'Dive into the world of books and authors',
-    questionCount: 30,
-  },
-  {
-    id: 'technology',
-    name: 'Technology',
-    icon: '💻',
-    color: '#00BCD4',
-    description: 'Test your knowledge of modern tech',
-    questionCount: 40,
-  },
-];
+class QuestionService {
+  private questions: Question[] = [];
+  private answeredQuestions: Map<string, AnsweredQuestion> = new Map();
+  private isInitialized: boolean = false;
+  private readonly STORAGE_KEY = '@BrainBites:answeredQuestions';
 
-class QuestionServiceClass {
-  private questions: Question[] = sampleQuestions;
-  private answeredQuestions: Set<string> = new Set();
+  constructor() {
+    // Initialize questions immediately in constructor
+    this.loadQuestionsFromCSV();
+    this.isInitialized = true;
+    console.log(`QuestionService constructed with ${this.questions.length} questions`);
+  }
 
-  async init() {
-    // Load answered questions from storage
+  async initialize(): Promise<void> {
+    if (this.isInitialized) {
+      console.log('QuestionService already initialized');
+      return;
+    }
+    
+    console.log('Initializing QuestionService...');
+    
+    // Load answered questions history
+    await this.loadAnsweredQuestions();
+    
+    this.isInitialized = true;
+    console.log(`QuestionService initialized with ${this.questions.length} questions`);
+  }
+
+  private loadQuestionsFromCSV(): void {
     try {
-      const answered = await AsyncStorage.getItem('answered_questions');
-      if (answered) {
-        this.answeredQuestions = new Set(JSON.parse(answered));
+      console.log('Loading questions from CSV data...');
+      
+      // Parse CSV
+      const lines = questionsCSV.split('\n').filter(line => line.trim() !== '');
+      console.log(`Found ${lines.length} lines in CSV`);
+      
+      if (lines.length < 2) {
+        console.error('CSV data is empty or invalid, using fallback questions');
+        this.questions = FALLBACK_QUESTIONS;
+        return;
+      }
+      
+      const headers = lines[0].split(',').map((h: string) => h.trim());
+      console.log('CSV headers:', headers);
+      
+      this.questions = [];
+      
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        // Simple CSV parsing (handles basic cases)
+        const values = line.split(',').map((v: string) => v.trim().replace(/^"|"$/g, ''));
+        
+        if (values.length >= 10) {
+          const question: Question = {
+            id: `q${i}`,
+            category: values[1].toLowerCase(), // category is at index 1
+            level: values[9].toLowerCase() as 'easy' | 'medium' | 'hard', // level is at index 9
+            question: values[2], // question is at index 2
+            optionA: values[3], // optionA is at index 3
+            optionB: values[4], // optionB is at index 4
+            optionC: values[5], // optionC is at index 5
+            optionD: values[6], // optionD is at index 6
+            correctAnswer: values[7].toUpperCase(), // correctAnswer is at index 7
+            explanation: values[8] || 'No explanation provided.' // explanation is at index 8
+          };
+          
+          this.questions.push(question);
+        } else {
+          console.warn(`Skipping line ${i + 1}: insufficient columns (${values.length})`);
+        }
+      }
+      
+      console.log(`Successfully loaded ${this.questions.length} questions from questionsData.ts`);
+    } catch (error) {
+      console.error('Failed to load questions from questionsData.ts, using fallback questions:', error);
+      this.questions = FALLBACK_QUESTIONS;
+    }
+  }
+
+  private async loadAnsweredQuestions(): Promise<void> {
+    try {
+      const stored = await AsyncStorage.getItem(this.STORAGE_KEY);
+      if (stored) {
+        const data = JSON.parse(stored);
+        this.answeredQuestions = new Map(data);
       }
     } catch (error) {
       console.error('Error loading answered questions:', error);
     }
   }
 
-  getCategories(): Category[] {
-    return categories;
-  }
-
-  getQuestions(
-    category?: string,
-    difficulty?: 'easy' | 'medium' | 'hard',
-    count: number = 10
-  ): Question[] {
-    let filtered = this.questions;
-
-    if (category) {
-      filtered = filtered.filter(q => q.category === category);
-    }
-
-    if (difficulty) {
-      filtered = filtered.filter(q => q.difficulty === difficulty);
-    }
-
-    // Prioritize unanswered questions
-    const unanswered = filtered.filter(q => !this.answeredQuestions.has(q.id));
-    const answered = filtered.filter(q => this.answeredQuestions.has(q.id));
-
-    // Combine unanswered first, then answered
-    const combined = [...unanswered, ...answered];
-
-    // Shuffle and return requested count
-    return this.shuffle(combined).slice(0, count);
-  }
-
-  markQuestionAnswered(questionId: string) {
-    this.answeredQuestions.add(questionId);
-    this.saveAnsweredQuestions();
-  }
-
-  getQuestionStats() {
-    const total = this.questions.length;
-    const answered = this.answeredQuestions.size;
-    const remaining = total - answered;
-    const percentComplete = Math.round((answered / total) * 100);
-
-    return {
-      total,
-      answered,
-      remaining,
-      percentComplete,
-    };
-  }
-
-  async resetProgress() {
-    this.answeredQuestions.clear();
-    await AsyncStorage.removeItem('answered_questions');
-  }
-
-  private shuffle<T>(array: T[]): T[] {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-  }
-
-  private async saveAnsweredQuestions() {
+  private async saveAnsweredQuestions(): Promise<void> {
     try {
-      await AsyncStorage.setItem(
-        'answered_questions',
-        JSON.stringify(Array.from(this.answeredQuestions))
-      );
+      const data = Array.from(this.answeredQuestions.entries());
+      await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
     } catch (error) {
       console.error('Error saving answered questions:', error);
     }
   }
 
-  // Method to add custom questions (for future expansion)
-  async addCustomQuestions(newQuestions: Question[]) {
-    this.questions = [...this.questions, ...newQuestions];
-    // In a real app, this would save to a database
+  async recordAnswer(questionId: string, isCorrect: boolean): Promise<void> {
+    this.answeredQuestions.set(questionId, {
+      correct: isCorrect,
+      timestamp: new Date().toISOString()
+    });
+    await this.saveAnsweredQuestions();
   }
 
-  // Method to fetch questions from API (for future expansion)
-  async fetchQuestionsFromAPI(endpoint: string): Promise<Question[]> {
-    try {
-      const response = await fetch(endpoint);
-      const data = await response.json();
-      return data.questions;
-    } catch (error) {
-      console.error('Error fetching questions:', error);
-      return [];
+  getRandomQuestion(category?: string, difficulty?: 'easy' | 'medium' | 'hard'): Question {
+    if (!this.isInitialized) {
+      throw new Error('QuestionService not initialized');
     }
+
+    // Filter questions based on criteria
+    let availableQuestions = this.questions.filter(q => {
+      // Filter by category if specified
+      if (category && q.category !== category.toLowerCase()) {
+        return false;
+      }
+      
+      // Filter by difficulty if specified
+      if (difficulty && q.level !== difficulty) {
+        return false;
+      }
+      
+      // Check if already answered correctly
+      const answered = this.answeredQuestions.get(q.id);
+      if (answered && answered.correct) {
+        return false; // Skip correctly answered questions
+      }
+      
+      return true;
+    });
+
+    // If no questions available, include previously correct ones
+    if (availableQuestions.length === 0) {
+      availableQuestions = this.questions.filter(q => {
+        if (category && q.category !== category.toLowerCase()) {
+          return false;
+        }
+        if (difficulty && q.level !== difficulty) {
+          return false;
+        }
+        return true;
+      });
+    }
+
+    if (availableQuestions.length === 0) {
+      throw new Error('No questions available');
+    }
+
+    // Return random question
+    const randomIndex = Math.floor(Math.random() * availableQuestions.length);
+    return availableQuestions[randomIndex];
+  }
+
+  getQuestionStats(): QuestionStats {
+    const total = this.questions.length;
+    const answered = this.answeredQuestions.size;
+    const correct = Array.from(this.answeredQuestions.values())
+      .filter(a => a.correct).length;
+    
+    return {
+      total,
+      answered,
+      correct,
+      incorrect: answered - correct,
+      remaining: total - correct
+    };
+  }
+
+  getCategories(): Category[] {
+    if (!this.isInitialized) {
+      console.log('QuestionService not initialized, returning default categories');
+      // Return default categories if not initialized
+      return [
+        {
+          id: 'science',
+          name: 'Science',
+          icon: '🔬',
+          color: '#4CAF50',
+          description: 'Explore the wonders of science and discovery',
+          questionCount: 0
+        },
+        {
+          id: 'history',
+          name: 'History',
+          icon: '📚',
+          color: '#FF9800',
+          description: 'Journey through time and historical events',
+          questionCount: 0
+        },
+        {
+          id: 'math',
+          name: 'Mathematics',
+          icon: '📐',
+          color: '#2196F3',
+          description: 'Master numbers, equations, and logic',
+          questionCount: 0
+        },
+        {
+          id: 'geography',
+          name: 'Geography',
+          icon: '🌍',
+          color: '#9C27B0',
+          description: 'Discover the world and its places',
+          questionCount: 0
+        },
+        {
+          id: 'literature',
+          name: 'Literature',
+          icon: '📖',
+          color: '#E91E63',
+          description: 'Explore classic and modern literature',
+          questionCount: 0
+        },
+        {
+          id: 'sports',
+          name: 'Sports',
+          icon: '⚽',
+          color: '#FF5722',
+          description: 'Test your knowledge of sports and games',
+          questionCount: 0
+        }
+      ];
+    }
+
+    console.log(`Generating categories from ${this.questions.length} questions`);
+    
+    // Count questions per category
+    const categoryCounts = new Map<string, number>();
+    this.questions.forEach(question => {
+      const count = categoryCounts.get(question.category) || 0;
+      categoryCounts.set(question.category, count + 1);
+    });
+
+    console.log('Category counts:', Array.from(categoryCounts.entries()));
+
+    // Define category metadata
+    const categoryMetadata: { [key: string]: Omit<Category, 'id' | 'questionCount'> } = {
+      'science': {
+        name: 'Science',
+        icon: '🔬',
+        color: '#4CAF50',
+        description: 'Explore the wonders of science and discovery'
+      },
+      'history': {
+        name: 'History',
+        icon: '📚',
+        color: '#FF9800',
+        description: 'Journey through time and historical events'
+      },
+      'math': {
+        name: 'Mathematics',
+        icon: '📐',
+        color: '#2196F3',
+        description: 'Master numbers, equations, and logic'
+      },
+      'geography': {
+        name: 'Geography',
+        icon: '🌍',
+        color: '#9C27B0',
+        description: 'Discover the world and its places'
+      },
+      'literature': {
+        name: 'Literature',
+        icon: '📖',
+        color: '#E91E63',
+        description: 'Explore classic and modern literature'
+      },
+      'sports': {
+        name: 'Sports',
+        icon: '⚽',
+        color: '#FF5722',
+        description: 'Test your knowledge of sports and games'
+      },
+      'art': {
+        name: 'Art',
+        icon: '🎨',
+        color: '#FFC107',
+        description: 'Discover famous artists and masterpieces'
+      },
+      'music': {
+        name: 'Music',
+        icon: '🎵',
+        color: '#00BCD4',
+        description: 'Learn about music theory and musicians'
+      },
+      'technology': {
+        name: 'Technology',
+        icon: '💻',
+        color: '#607D8B',
+        description: 'Explore the world of technology and innovation'
+      },
+      'food': {
+        name: 'Food & Cooking',
+        icon: '🍳',
+        color: '#795548',
+        description: 'Discover culinary knowledge and food facts'
+      },
+      'animals': {
+        name: 'Animals',
+        icon: '🐾',
+        color: '#8BC34A',
+        description: 'Learn about wildlife and animal kingdom'
+      },
+      'language': {
+        name: 'Language',
+        icon: '🗣️',
+        color: '#FF5722',
+        description: 'Explore languages and linguistics'
+      }
+    };
+
+    // Build categories array
+    const categories: Category[] = [];
+    categoryCounts.forEach((count, categoryId) => {
+      const metadata = categoryMetadata[categoryId.toLowerCase()];
+      if (metadata) {
+        categories.push({
+          id: categoryId.toLowerCase(),
+          name: metadata.name,
+          icon: metadata.icon,
+          color: metadata.color,
+          description: metadata.description,
+          questionCount: count
+        });
+      } else {
+        console.warn(`No metadata found for category: ${categoryId}`);
+      }
+    });
+
+    console.log(`Generated ${categories.length} categories`);
+    
+    // Sort by question count (descending)
+    return categories.sort((a, b) => b.questionCount - a.questionCount);
+  }
+
+  async resetProgress(): Promise<void> {
+    this.answeredQuestions.clear();
+    await AsyncStorage.removeItem(this.STORAGE_KEY);
   }
 }
 
-export const QuestionService = new QuestionServiceClass();
+export default new QuestionService();
