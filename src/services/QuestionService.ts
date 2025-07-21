@@ -388,6 +388,20 @@ class QuestionService {
     this.answeredQuestions.clear();
     await AsyncStorage.removeItem(this.STORAGE_KEY);
   }
+
+  // Add getNextQuestion method
+  getNextQuestion(difficulty: 'easy' | 'medium' | 'hard'): Question | null {
+    // Get questions for the specified difficulty
+    const questions = this.questions.filter(q => q.level === difficulty);
+    
+    // Get a random question
+    if (questions.length > 0) {
+      const randomIndex = Math.floor(Math.random() * questions.length);
+      return questions[randomIndex];
+    }
+    
+    return null;
+  }
 }
 
 export default new QuestionService();

@@ -17,6 +17,7 @@ import theme from '../styles/theme';
 import { useUserStore } from '../store/useUserStore';
 import { logEvent } from '../config/Firebase';
 import SoundService from '../services/SoundService';
+import EnhancedScoreService from '../services/EnhancedScoreService';
 
 interface LeaderboardEntry {
   rank: number;
@@ -27,18 +28,27 @@ interface LeaderboardEntry {
   isCurrentUser?: boolean;
 }
 
-// Mock data - In production, this would come from a backend
-const mockLeaderboard: LeaderboardEntry[] = [
-  { rank: 1, username: 'QuizMaster', score: 2450, streak: 25, avatar: '🦁' },
-  { rank: 2, username: 'Brainiac', score: 2320, streak: 18, avatar: '🧠' },
-  { rank: 3, username: 'SmartCookie', score: 2180, streak: 22, avatar: '🍪' },
-  { rank: 4, username: 'Einstein Jr', score: 1950, streak: 15, avatar: '👨‍🔬' },
-  { rank: 5, username: 'QuizWhiz', score: 1820, streak: 12, avatar: '⚡' },
-  { rank: 6, username: 'Genius', score: 1650, streak: 10, avatar: '💡' },
-  { rank: 7, username: 'Scholar', score: 1500, streak: 8, avatar: '📚' },
-  { rank: 8, username: 'Thinker', score: 1350, streak: 7, avatar: '🤔' },
-  { rank: 9, username: 'Learner', score: 1200, streak: 5, avatar: '🎓' },
-  { rank: 10, username: 'Student', score: 1050, streak: 3, avatar: '✏️' },
+const MOCK_LEADERBOARD_DATA: LeaderboardEntry[] = [
+  { rank: 1, username: 'QuizMaster99', score: 8750, streak: 42, avatar: '🦊' },
+  { rank: 2, username: 'BrainiacPro', score: 8420, streak: 38, avatar: '🦅' },
+  { rank: 3, username: 'SmartCookie', score: 7990, streak: 35, avatar: '🐯' },
+  { rank: 4, username: 'KnowledgeNinja', score: 7650, streak: 31, avatar: '🦈' },
+  { rank: 5, username: 'TriviaTitan', score: 7200, streak: 28, avatar: '🦁' },
+  { rank: 6, username: 'WisdomWarrior', score: 6850, streak: 25, avatar: '🐺' },
+  { rank: 7, username: 'QuizWhiz', score: 6500, streak: 22, avatar: '🦝' },
+  { rank: 8, username: 'BrainStorm', score: 6200, streak: 20, avatar: '🦜' },
+  { rank: 9, username: 'MindMaster', score: 5900, streak: 18, avatar: '🦚' },
+  { rank: 10, username: 'ThinkTank', score: 5600, streak: 16, avatar: '🦢' },
+  { rank: 11, username: 'IQChampion', score: 5300, streak: 15, avatar: '🐨' },
+  { rank: 12, username: 'CleverClogs', score: 5000, streak: 14, avatar: '🦒' },
+  { rank: 13, username: 'SmartPants', score: 4800, streak: 13, avatar: '🦘' },
+  { rank: 14, username: 'BrightSpark', score: 4600, streak: 12, avatar: '🦌' },
+  { rank: 15, username: 'QuickThinker', score: 4400, streak: 11, avatar: '🦫' },
+  { rank: 16, username: 'SharpMind', score: 4200, streak: 10, avatar: '🦦' },
+  { rank: 17, username: 'StudyStar', score: 4000, streak: 9, avatar: '🦭' },
+  { rank: 18, username: 'FactFinder', score: 3800, streak: 8, avatar: '🐿️' },
+  { rank: 19, username: 'LogicLord', score: 3600, streak: 7, avatar: '🦔' },
+  { rank: 20, username: 'PuzzlePro', score: 3400, streak: 6, avatar: '🦥' },
 ];
 
 const LeaderboardScreen: React.FC = () => {
@@ -59,37 +69,35 @@ const LeaderboardScreen: React.FC = () => {
   const loadLeaderboard = async () => {
     setIsLoading(true);
     
-    // Simulate API call
     setTimeout(() => {
-      // Insert current user into leaderboard
+      const userScore = EnhancedScoreService.getScoreInfo().dailyScore;
       const userEntry: LeaderboardEntry = {
         rank: 0,
-        username: username,
-        score: score,
-        streak: maxStreak,
+        username: 'CaBBy', // Default username
+        score: userScore,
+        streak: EnhancedScoreService.getScoreInfo().currentStreak,
         avatar: '🦫',
         isCurrentUser: true,
       };
       
-      // Find user's rank
-      const allEntries = [...mockLeaderboard, userEntry].sort((a, b) => b.score - a.score);
-      const userIndex = allEntries.findIndex(entry => entry.isCurrentUser);
+      // Combine and sort
+      const allEntries = [...MOCK_LEADERBOARD_DATA, userEntry]
+        .sort((a, b) => b.score - a.score)
+        .map((entry, index) => ({
+          ...entry,
+          rank: index + 1,
+          isCurrentUser: entry.username === 'CaBBy'
+        }));
       
+      const userIndex = allEntries.findIndex(entry => entry.isCurrentUser);
       if (userIndex !== -1) {
-        allEntries[userIndex].rank = userIndex + 1;
         setUserRank(userIndex + 1);
       }
       
-      // Update ranks
-      const rankedEntries = allEntries.map((entry, index) => ({
-        ...entry,
-        rank: index + 1,
-      }));
-      
-      setLeaderboard(rankedEntries.slice(0, 100)); // Top 100
+      setLeaderboard(allEntries);
       setIsLoading(false);
       setIsRefreshing(false);
-    }, 1000);
+    }, 800);
   };
 
   const handleRefresh = () => {

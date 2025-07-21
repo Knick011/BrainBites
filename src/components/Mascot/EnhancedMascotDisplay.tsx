@@ -13,6 +13,29 @@ import {
   TouchableOpacity
 } from 'react-native';
 
+// Add mascot messages
+export const MASCOT_MESSAGES = {
+  welcome: "Hey there, quiz champion! 🎉 Ready to exercise those brain muscles?",
+  correct: [
+    "Boom! You nailed it! 🎯",
+    "Wow, you're on fire! 🔥",
+    "Genius alert! 🧠✨",
+    "That's what I'm talking about! 🙌",
+  ],
+  incorrect: [
+    "Oops! Nice try though! 💪",
+    "Don't worry, you'll get the next one! 🌟",
+    "Learning moment! Let's see why... 🤔",
+  ],
+  streak: [
+    "STREAK MASTER! Keep it going! 🔥🔥🔥",
+    "Unstoppable! You're crushing it! 💥",
+    "Look at you go! Streak champion! 🏆",
+  ],
+  timeDebt: "Uh oh! Time's ticking backwards! Complete quizzes to catch up! ⏰💨",
+  dailyGoal: "Woohoo! Goal crushed! You're amazing! 🎊",
+};
+
 // Get screen dimensions for positioning
 const { width, height } = Dimensions.get('window');
 
@@ -479,49 +502,73 @@ const styles = StyleSheet.create({
   },
   speechBubble: {
     position: 'absolute',
-    backgroundColor: '#FFF8E7', // theme.colors.background
+    backgroundColor: '#FFFFFF',
     borderRadius: 24,
-    padding: 20,
-    minWidth: 250,
-    maxWidth: 320,
-    borderWidth: 3,
-    borderColor: '#FF9F1C', // theme.colors.primary
+    padding: 24,
+    minWidth: 280,
+    maxWidth: 340,
+    borderWidth: 2,
+    borderColor: '#E8F4FF',
     bottom: '25%',
     zIndex: 1002,
+    // Professional gradient border effect
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.25,
-        shadowRadius: 16,
+        shadowColor: '#2196F3',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.15,
+        shadowRadius: 20,
       },
       android: {
-        elevation: 8,
+        elevation: 10,
       },
     }),
+    // Add subtle gradient overlay
+    overflow: 'hidden',
   },
   speechText: {
-    fontSize: 18,
+    fontSize: 16,
     fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'Roboto',
-    color: '#333333', // theme.colors.textDark
-    lineHeight: 26,
+    color: '#2C3E50',
+    lineHeight: 24,
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
+    letterSpacing: 0.3,
   },
   tapIndicator: {
     marginTop: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    backgroundColor: 'rgba(255, 159, 28, 0.1)',
-    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#E8F4FF',
+    borderRadius: 16,
     alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: '#90CAF9',
   },
   tapText: {
-    fontSize: 12,
-    color: '#FF9F1C', // theme.colors.primary
-    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'Roboto',
+    fontSize: 13,
+    color: '#1976D2',
+    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'Roboto',
     textAlign: 'center',
-    opacity: 0.8,
+    fontWeight: '500',
+    letterSpacing: 0.5,
+  },
+  
+  // Add speech bubble tail
+  speechBubbleTail: {
+    position: 'absolute',
+    bottom: -10,
+    left: '50%',
+    marginLeft: -15,
+    width: 0,
+    height: 0,
+    borderLeftWidth: 15,
+    borderRightWidth: 15,
+    borderTopWidth: 10,
+    borderStyle: 'solid',
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#FFFFFF',
   },
   peekingContainer: {
     position: 'absolute',

@@ -2,27 +2,48 @@
 
 // Navigation Types
 export type RootStackParamList = {
-  Welcome: undefined;
   Home: undefined;
-  Quiz: { category?: string; difficulty?: 'easy' | 'medium' | 'hard' };
+  Quiz: { difficulty: 'easy' | 'medium' | 'hard'; category?: string };
   Categories: undefined;
   DailyGoals: undefined;
   Leaderboard: undefined;
   Settings: undefined;
+  Welcome: undefined;
 };
 
 // Question Types
 export interface Question {
   id: string;
-  category: string;
   question: string;
-  optionA: string;
-  optionB: string;
-  optionC: string;
-  optionD: string;
   correctAnswer: string;
+  options: Record<string, string>;
+  category: string;
+  difficulty: 'easy' | 'medium' | 'hard';
   explanation: string;
-  level: 'easy' | 'medium' | 'hard';
+  level?: 'easy' | 'medium' | 'hard';
+  optionA?: string;
+  optionB?: string;
+  optionC?: string;
+  optionD?: string;
+}
+
+export interface QuizScreenState {
+  currentQuestion: Question | null;
+  selectedAnswer: string | null;
+  showResult: boolean;
+  isCorrect: boolean | null;
+  streak: number;
+  showStreakAnimation: boolean;
+  showMascot: boolean;
+  mascotMessage: string;
+  isLoading: boolean;
+  questionsAnswered: number;
+  correctAnswers: number;
+  showExplanation: boolean;
+  score: number;
+  isStreakMilestone: boolean;
+  showPointsAnimation: boolean;
+  pointsEarned: number;
 }
 
 // User Types
@@ -152,10 +173,11 @@ export interface ScoreInfo {
 
 export interface ScoreResult {
   pointsEarned: number;
+  currentStreak: number;
   newScore: number;
-  newStreak: number;
   streakLevel: number;
   isMilestone: boolean;
+  newStreak: number;
 }
 
 // Timer Update Types

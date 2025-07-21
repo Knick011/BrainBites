@@ -19,6 +19,7 @@ class MainApplication : Application(), ReactApplication {
               // Add our custom package for PowerManager
               add(PowerManagerPackage())
               add(TimerPackage())
+              add(BrainBitesTimerPackage())
             }
 
         override fun getJSMainModuleName(): String = "index"

@@ -140,12 +140,31 @@ class EnhancedScoreService {
     }
   }
 
+  async saveAllData(): Promise<void> {
+    try {
+      await Promise.all([
+        AsyncStorage.setItem(this.STORAGE_KEYS.DAILY_SCORE, this.dailyScore.toString()),
+        AsyncStorage.setItem(this.STORAGE_KEYS.CURRENT_STREAK, this.currentStreak.toString()),
+        AsyncStorage.setItem(this.STORAGE_KEYS.HIGHEST_STREAK, this.highestStreak.toString()),
+        AsyncStorage.setItem(this.STORAGE_KEYS.TOTAL_QUESTIONS, this.totalQuestionsAnswered.toString()),
+        AsyncStorage.setItem(this.STORAGE_KEYS.CORRECT_ANSWERS, this.correctAnswers.toString()),
+        AsyncStorage.setItem(this.STORAGE_KEYS.DAILY_STATS, JSON.stringify(this.todayStats))
+      ]);
+    } catch (error) {
+      console.error('Failed to save score data:', error);
+    }
+  }
+
   startQuestionTimer(): void {
     this.questionStartTime = Date.now();
   }
 
-  recordAnswer(isCorrect: boolean, metadata: AnswerMetadata = {}): ScoreResult {
-    const { startTime, category, difficulty } = metadata;
+  async processAnswer(
+    isCorrect: boolean,
+    difficulty: 'easy' | 'medium' | 'hard',
+    metadata?: AnswerMetadata
+  ): Promise<ScoreResult> {
+    const { startTime, category } = metadata || {};
     
     // Update total questions
     this.totalQuestionsAnswered++;
@@ -217,7 +236,7 @@ class EnhancedScoreService {
       : 0;
     
     this.calculateStreakLevel();
-    this.saveData();
+    await this.saveAllData();
     
     return {
       pointsEarned,

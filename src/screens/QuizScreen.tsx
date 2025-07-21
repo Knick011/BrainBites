@@ -1,74 +1,94 @@
 // src/screens/QuizScreen.tsx - Updated with AdMob and question tracking
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
   StyleSheet, 
   TouchableOpacity, 
-  SafeAreaView, 
-  ActivityIndicator,
-  Animated,
-  Easing,
-  ScrollView,
+  SafeAreaView,
   StatusBar,
   Platform,
-  BackHandler
+  BackHandler,
+  Alert,
+  Animated,
+  Easing,
+  ActivityIndicator,
+  ScrollView
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList, Question } from '../types';
+import { RootStackParamList, Question, ScoreResult } from '../types';
 import QuestionService from '../services/QuestionService';
 import EnhancedTimerService from '../services/EnhancedTimerService';
-import SoundService from '../services/SoundService';
 import EnhancedScoreService from '../services/EnhancedScoreService';
-import EnhancedMascotDisplay from '../components/Mascot/EnhancedMascotDisplay';
-import AdMobService from '../services/AdMobService';
+import SoundService from '../services/SoundService';
+import { logEvent } from '../config/Firebase';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import BannerAdComponent from '../components/BannerAdComponent';
-import theme from '../styles/theme';
+import EnhancedMascotDisplay from '../components/Mascot/EnhancedMascotDisplay';
 
 type QuizScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Quiz'>;
 type QuizScreenRouteProp = RouteProp<RootStackParamList, 'Quiz'>;
 type MascotType = 'happy' | 'sad' | 'excited' | 'depressed' | 'gamemode' | 'below';
 
+// Update state interface
 interface QuizScreenState {
   currentQuestion: Question | null;
   selectedAnswer: string | null;
-  isCorrect: boolean | null;
-  isLoading: boolean;
-  showExplanation: boolean;
+  showResult: boolean;
+  isCorrect: boolean;
   streak: number;
+  showStreakAnimation: boolean;
+  showMascot: boolean;
+  mascotMessage: string;
+  isLoading: boolean;
   questionsAnswered: number;
   correctAnswers: number;
+  showExplanation: boolean;
+  score: number;
+  isStreakMilestone: boolean;
   showPointsAnimation: boolean;
   pointsEarned: number;
-  score: number;
-  streakLevel: number;
-  isStreakMilestone: boolean;
 }
 
 const QuizScreen: React.FC = () => {
   const navigation = useNavigation<QuizScreenNavigationProp>();
   const route = useRoute<QuizScreenRouteProp>();
-  
-  const [state, setState] = useState<QuizScreenState>({
+  const { difficulty, category } = route.params;
+
+  // Timer refs
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timerAnimation = useRef<Animated.CompositeAnimation | null>(null);
+  const questionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const streakTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const questionStartTime = useRef<number>(0);
+
+  // Animation values
+  const timerAnim = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+
+  // State initialization
+  const [state, setState] = useState<QuizScreenState>(() => ({
     currentQuestion: null,
     selectedAnswer: null,
-    isCorrect: null,
-    isLoading: true,
-    showExplanation: false,
+    showResult: false,
+    isCorrect: false,
     streak: 0,
+    showStreakAnimation: false,
+    showMascot: false,
+    mascotMessage: '',
+    isLoading: true,
     questionsAnswered: 0,
     correctAnswers: 0,
+    showExplanation: false,
+    score: 0,
+    isStreakMilestone: false,
     showPointsAnimation: false,
     pointsEarned: 0,
-    score: 0,
-    streakLevel: 0,
-    isStreakMilestone: false,
-  });
+  }));
   
-  const { category, difficulty } = route.params || {};
-  const [autoAdvanceTimer, setAutoAdvanceTimer] = useState<NodeJS.Timeout | null>(null);
+  const autoAdvanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Mascot state
   const [mascotType, setMascotType] = useState<MascotType>('happy');
@@ -77,17 +97,10 @@ const QuizScreen: React.FC = () => {
   
   // Animation values
   const cardAnim = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
   const optionsAnim = useRef<Animated.Value[]>([]).current;
   const explanationAnim = useRef(new Animated.Value(0)).current;
   const streakAnim = useRef(new Animated.Value(1)).current;
   const pointsAnim = useRef(new Animated.Value(0)).current;
-  const timerAnim = useRef(new Animated.Value(1)).current;
-  
-  // Refs
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const timerAnimation = useRef<Animated.CompositeAnimation | null>(null);
-  const questionStartTime = useRef<number>(0);
   
   useEffect(() => {
     // Initialize services
@@ -120,19 +133,34 @@ const QuizScreen: React.FC = () => {
       
       if (timerRef.current) clearTimeout(timerRef.current);
       if (timerAnimation.current) timerAnimation.current.stop();
-      if (autoAdvanceTimer) clearTimeout(autoAdvanceTimer);
+      if (autoAdvanceTimer.current) clearTimeout(autoAdvanceTimer.current);
     };
   }, []);
 
-  const handleBackPress = (): boolean => {
-    EnhancedScoreService.endQuizSession();
-    
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      navigation.navigate('Home');
-    }
+  const handleBackPress = () => {
+    showExitWarning();
     return true;
+  };
+
+  const showExitWarning = () => {
+    Alert.alert(
+      'Leave Quiz?',
+      'Your score will be saved but your streak will be broken. Are you sure you want to leave?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Leave', 
+          style: 'destructive',
+          onPress: () => {
+            // Break streak by processing a wrong answer
+            if (difficulty) {
+              EnhancedScoreService.processAnswer(false, difficulty);
+            }
+            navigation.goBack();
+          }
+        }
+      ]
+    );
   };
 
   const loadQuestion = async () => {
@@ -140,7 +168,7 @@ const QuizScreen: React.FC = () => {
       showExplanation: false, showPointsAnimation: false, isStreakMilestone: false }));
     setShowMascot(false);
     
-    if (autoAdvanceTimer) clearTimeout(autoAdvanceTimer);
+    if (autoAdvanceTimer.current) clearTimeout(autoAdvanceTimer.current);
     
     // Reset animations
     cardAnim.setValue(0);
@@ -227,8 +255,8 @@ const QuizScreen: React.FC = () => {
     }, 20000);
   };
   
-  const handleTimeUp = () => {
-    if (state.selectedAnswer !== null) return;
+  const handleTimeUp = async () => {
+    if (!state.currentQuestion || !difficulty) return;
     
     setState(prev => ({ ...prev, selectedAnswer: 'TIMEOUT', isCorrect: false }));
     
@@ -237,13 +265,10 @@ const QuizScreen: React.FC = () => {
       showExplanationWithAnimation();
     }, 500);
     
-    if (state.currentQuestion) {
-      EnhancedScoreService.recordAnswer(false, { 
-        startTime: questionStartTime.current, 
-        category 
-      });
-      QuestionService.recordAnswer(state.currentQuestion.id, false);
-    }
+    await EnhancedScoreService.processAnswer(false, difficulty, { 
+      startTime: questionStartTime.current,
+      category: state.currentQuestion.category 
+    });
     
     setState(prev => ({ ...prev, streak: 0 }));
     SoundService.playIncorrect();
@@ -252,91 +277,102 @@ const QuizScreen: React.FC = () => {
     setMascotMessage("Time's up! ⏰\nDon't worry, you'll get the next one!");
     setShowMascot(true);
     
-    setAutoAdvanceTimer(setTimeout(() => {
+    autoAdvanceTimer.current = setTimeout(() => {
       handleContinue();
-    }, 2000));
+    }, 2000);
   };
 
-  const handleAnswerSelect = async (option: string) => {
-    if (state.selectedAnswer !== null || !state.currentQuestion) return;
+  // Move to next question
+  const moveToNextQuestion = () => {
+    const nextQuestion = QuestionService.getNextQuestion(difficulty);
     
-    if (timerAnimation.current) timerAnimation.current.stop();
-    if (timerRef.current) clearTimeout(timerRef.current);
-    
-    const correct = option === state.currentQuestion.correctAnswer;
-    setState(prev => ({ ...prev, selectedAnswer: option, isCorrect: correct }));
-    
-    await QuestionService.recordAnswer(state.currentQuestion.id, correct);
-    
-    // Calculate time reward
-    let timeReward = 60; // 1 minute default
-    if (state.currentQuestion.level === 'medium') timeReward = 120; // 2 minutes
-    if (state.currentQuestion.level === 'hard') timeReward = 180; // 3 minutes
-    
-    const scoreResult = EnhancedScoreService.recordAnswer(correct, { 
-      startTime: questionStartTime.current,
-      category: category,
-    });
-    
-    if (correct) {
-      EnhancedTimerService.addTimeCredits(timeReward);
-      
-      setState(prev => ({
-        ...prev,
-        pointsEarned: scoreResult.pointsEarned,
-        showPointsAnimation: true,
-        streak: scoreResult.newStreak,
-        score: scoreResult.newScore,
-        streakLevel: scoreResult.streakLevel,
-        correctAnswers: prev.correctAnswers + 1,
-        isStreakMilestone: scoreResult.isMilestone,
-      }));
-      
-      animatePoints();
-
-      if (scoreResult.isMilestone) {
-        setMascotType('gamemode');
-        setMascotMessage(`🔥 ${scoreResult.newStreak} question streak! 🔥\n+120 seconds bonus!`);
-        setShowMascot(true);
-        SoundService.playStreak();
-        EnhancedTimerService.addTimeCredits(120);
-      } else {
-        SoundService.playCorrect();
-      }
-      
-      setTimeout(() => {
-        setState(prev => ({ ...prev, showExplanation: true }));
-        showExplanationWithAnimation();
-      }, 800);
-      
-      setAutoAdvanceTimer(setTimeout(() => {
-        handleContinue();
-      }, 2000));
-    } else {
-      setState(prev => ({ ...prev, streak: 0 }));
-      SoundService.playIncorrect();
-      
-      setTimeout(() => {
-        showMascotForWrongAnswer();
-      }, 500);
-      
-      setTimeout(() => {
-        setState(prev => ({ ...prev, showExplanation: true }));
-        showExplanationWithAnimation();
-      }, 1500);
-      
-      setAutoAdvanceTimer(setTimeout(() => {
-        handleContinue();
-      }, 2000));
+    // Convert old format to new format if needed
+    if (nextQuestion && !nextQuestion.options && nextQuestion.optionA) {
+      nextQuestion.options = {
+        A: nextQuestion.optionA,
+        B: nextQuestion.optionB || '',
+        C: nextQuestion.optionC || '',
+        D: nextQuestion.optionD || '',
+      };
+      nextQuestion.difficulty = nextQuestion.level || difficulty;
+      nextQuestion.explanation = nextQuestion.explanation || 'No explanation available.';
     }
     
-    const updatedScoreInfo = EnhancedScoreService.getScoreInfo();
+    // Reset state for next question
     setState(prev => ({
       ...prev,
-      score: updatedScoreInfo.dailyScore ?? 0,
-      streak: updatedScoreInfo.currentStreak,
-      streakLevel: updatedScoreInfo.streakLevel,
+      selectedAnswer: null,
+      showResult: false,
+      isCorrect: false,
+      showExplanation: false,
+      currentQuestion: nextQuestion,
     }));
+    
+    // Reset timers and animations
+    if (questionTimer.current) clearTimeout(questionTimer.current);
+    if (streakTimer.current) clearTimeout(streakTimer.current);
+  };
+
+  // Update handleAnswer function
+  const handleAnswer = async (answer: string) => {
+    if (!state.currentQuestion || !difficulty) return;
+    
+    const isCorrect = answer === state.currentQuestion.correctAnswer;
+    
+    // Calculate time reward based on difficulty
+    let timeReward = 60; // Default 1 minute
+    if (state.currentQuestion.difficulty === 'medium') timeReward = 120; // 2 minutes
+    if (state.currentQuestion.difficulty === 'hard') timeReward = 180; // 3 minutes
+    
+    try {
+      // Process answer and get result
+      const result = await EnhancedScoreService.processAnswer(isCorrect, difficulty, { 
+        startTime: questionStartTime.current,
+        category: state.currentQuestion.category,
+      });
+      
+      // Update UI
+      setState(prev => ({
+        ...prev,
+        selectedAnswer: answer,
+        showResult: true,
+        isCorrect,
+        streak: isCorrect ? prev.streak + 1 : 0,
+        questionsAnswered: prev.questionsAnswered + 1,
+        correctAnswers: isCorrect ? prev.correctAnswers + 1 : prev.correctAnswers,
+      }));
+      
+      // Handle sound effects
+      if (isCorrect) {
+        SoundService.playCorrect();
+        if (state.streak % 5 === 0) {
+          SoundService.playStreak();
+          setState(prev => ({ ...prev, showStreakAnimation: true }));
+          if (streakTimer.current) clearTimeout(streakTimer.current);
+          streakTimer.current = setTimeout(() => {
+            setState(prev => ({ ...prev, showStreakAnimation: false }));
+          }, 2000);
+        }
+      } else {
+        SoundService.playIncorrect();
+      }
+      
+      // Log analytics
+      logEvent('answer_question', {
+        isCorrect,
+        difficulty,
+        category: state.currentQuestion.category,
+        questionId: state.currentQuestion.id,
+      });
+      
+      // Move to next question after delay
+      if (questionTimer.current) clearTimeout(questionTimer.current);
+      questionTimer.current = setTimeout(() => {
+        moveToNextQuestion();
+      }, 2000);
+    } catch (error) {
+      console.error('Error processing answer:', error);
+    }
   };
 
   const animatePoints = () => {
@@ -388,7 +424,7 @@ const QuizScreen: React.FC = () => {
   };
   
   const handleContinue = () => {
-    if (autoAdvanceTimer) clearTimeout(autoAdvanceTimer);
+    if (autoAdvanceTimer.current) clearTimeout(autoAdvanceTimer.current);
     SoundService.playButtonPress();
     setShowMascot(false);
     setTimeout(() => loadQuestion(), 100);
@@ -444,8 +480,11 @@ const QuizScreen: React.FC = () => {
             { opacity: fadeAnim }
           ]}
         >
-          <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
-            <Icon name="arrow-left" size={24} color="#333" />
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={showExitWarning}
+          >
+            <Icon name="arrow-back" size={24} color="#666" />
           </TouchableOpacity>
           
           <View style={styles.statsContainer}>
@@ -603,7 +642,7 @@ const QuizScreen: React.FC = () => {
                     ),
                     state.selectedAnswer === null && styles.hoverableOption
                   ]}
-                  onPress={() => handleAnswerSelect(option.key)}
+                  onPress={() => handleAnswer(option.key)}
                   disabled={state.selectedAnswer !== null}
                   activeOpacity={0.8}
                 >
