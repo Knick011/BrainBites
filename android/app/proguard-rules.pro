@@ -16,3 +16,6 @@
 # React Native
 -keep class com.facebook.react.** { *; }
 -keep class com.brainbites.** { *; }
+-keep class com.brainbites.timer.** { *; }
+-keep class * implements com.facebook.react.bridge.ReactPackage { *; }
+-keep class * implements com.facebook.react.bridge.NativeModule { *; }

@@ -120,7 +120,10 @@ android {
 }
 
 dependencies {
-    implementation fileTree(dir: "libs", include: ["*.jar"])
+    implementation "com.facebook.react:react-native:+"
+    implementation "androidx.core:core:1.8.0"
+    implementation "androidx.work:work-runtime:2.7.1"
+    implementation "androidx.localbroadcastmanager:localbroadcastmanager:1.1.0"
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 
