@@ -1,5 +1,5 @@
-// src/screens/QuizScreen.tsx - Updated with AdMob and question tracking
-import React, { useRef, useState, useEffect } from 'react';
+// src/screens/QuizScreen.tsx - Complete production-ready implementation with fixed timer
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -13,9 +13,10 @@ import {
   Animated,
   Easing,
   ActivityIndicator,
-  ScrollView
+  ScrollView,
+  Dimensions
 } from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList, Question, ScoreResult } from '../types';
 import QuestionService from '../services/QuestionService';
@@ -27,11 +28,12 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import BannerAdComponent from '../components/BannerAdComponent';
 import EnhancedMascotDisplay from '../components/Mascot/EnhancedMascotDisplay';
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 type QuizScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Quiz'>;
 type QuizScreenRouteProp = RouteProp<RootStackParamList, 'Quiz'>;
 type MascotType = 'happy' | 'sad' | 'excited' | 'depressed' | 'gamemode' | 'below';
 
-// Update state interface
 interface QuizScreenState {
   currentQuestion: Question | null;
   selectedAnswer: string | null;
@@ -49,7 +51,14 @@ interface QuizScreenState {
   isStreakMilestone: boolean;
   showPointsAnimation: boolean;
   pointsEarned: number;
+  timeRemaining: number;
+  isTimerActive: boolean;
+  hasTimedOut: boolean;
 }
+
+const QUESTION_TIME_LIMIT = 20; // 20 seconds per question
+const RESULT_DISPLAY_TIME = 3000; // 3 seconds to show result
+const NEXT_QUESTION_DELAY = 500; // Small delay before next question
 
 const QuizScreen: React.FC = () => {
   const navigation = useNavigation<QuizScreenNavigationProp>();
@@ -57,19 +66,30 @@ const QuizScreen: React.FC = () => {
   const { difficulty, category } = route.params;
 
   // Timer refs
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const timerAnimation = useRef<Animated.CompositeAnimation | null>(null);
-  const questionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const streakTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const questionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const resultTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const questionStartTime = useRef<number>(0);
 
   // Animation values
   const timerAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
+  const cardAnim = useRef(new Animated.Value(0)).current;
+  const streakAnim = useRef(new Animated.Value(0)).current;
+  const pointsAnim = useRef(new Animated.Value(0)).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+
+  // Create option animations
+  const optionsAnim = useRef([
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0)
+  ]).current;
 
   // State initialization
-  const [state, setState] = useState<QuizScreenState>(() => ({
+  const [state, setState] = useState<QuizScreenState>({
     currentQuestion: null,
     selectedAnswer: null,
     showResult: false,
@@ -86,76 +106,403 @@ const QuizScreen: React.FC = () => {
     isStreakMilestone: false,
     showPointsAnimation: false,
     pointsEarned: 0,
-  }));
-  
-  const autoAdvanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  
-  // Mascot state
-  const [mascotType, setMascotType] = useState<MascotType>('happy');
-  const [mascotMessage, setMascotMessage] = useState('');
-  const [showMascot, setShowMascot] = useState(false);
-  
-  // Animation values
-  const cardAnim = useRef(new Animated.Value(0)).current;
-  const optionsAnim = useRef<Animated.Value[]>([]).current;
-  const explanationAnim = useRef(new Animated.Value(0)).current;
-  const streakAnim = useRef(new Animated.Value(1)).current;
-  const pointsAnim = useRef(new Animated.Value(0)).current;
-  
-  useEffect(() => {
-    // Initialize services
-    const initializeQuiz = async () => {
-      // Questions are now loaded synchronously in constructor, so we can load a question immediately
-      loadQuestion();
-      
-      // Initialize for answered questions history and other services
-      await QuestionService.initialize();
-      SoundService.startGameMusic();
-      
-      await EnhancedScoreService.loadSavedData();
-      const scoreInfo = EnhancedScoreService.getScoreInfo();
-      setState(prev => ({
-        ...prev,
-        streak: scoreInfo.currentStreak,
-        score: scoreInfo.dailyScore ?? 0,
-        streakLevel: scoreInfo.streakLevel,
-      }));
-    };
-    
-    initializeQuiz();
-    
-    // Handle back button press
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
-    
-    return () => {
-      backHandler.remove();
-      SoundService.stopMusic();
-      
-      if (timerRef.current) clearTimeout(timerRef.current);
-      if (timerAnimation.current) timerAnimation.current.stop();
-      if (autoAdvanceTimer.current) clearTimeout(autoAdvanceTimer.current);
-    };
+    timeRemaining: QUESTION_TIME_LIMIT,
+    isTimerActive: false,
+    hasTimedOut: false
+  });
+
+  // Cleanup function
+  const cleanup = useCallback(() => {
+    if (questionTimerRef.current) {
+      clearInterval(questionTimerRef.current);
+      questionTimerRef.current = null;
+    }
+    if (resultTimerRef.current) {
+      clearTimeout(resultTimerRef.current);
+      resultTimerRef.current = null;
+    }
+    if (animationTimeoutRef.current) {
+      clearTimeout(animationTimeoutRef.current);
+      animationTimeoutRef.current = null;
+    }
   }, []);
 
-  const handleBackPress = () => {
-    showExitWarning();
-    return true;
+  // Initialize quiz
+  useEffect(() => {
+    initializeQuiz();
+    return cleanup;
+  }, [cleanup]);
+
+  // Handle back button
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        handleQuitQuiz();
+        return true;
+      };
+
+      BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => BackHandler.removeEventListener('hardwareBackPress', onBackPress);
+    }, [])
+  );
+
+  const initializeQuiz = async () => {
+    try {
+      // Initialize services
+      await QuestionService.initialize();
+      await EnhancedTimerService.initialize();
+      
+      // Play game start sound
+      SoundService.playButtonClick();
+      
+      // Load first question
+      await loadNextQuestion();
+      
+      // Log quiz start
+      logEvent('quiz_started', {
+        difficulty,
+        category: category || 'random'
+      });
+      
+    } catch (error) {
+      console.error('Failed to initialize quiz:', error);
+      Alert.alert('Error', 'Failed to load quiz. Please try again.');
+      navigation.goBack();
+    }
   };
 
-  const showExitWarning = () => {
+  const loadNextQuestion = async () => {
+    try {
+      setState(prev => ({ ...prev, isLoading: true }));
+      
+      const question = QuestionService.getRandomQuestion(category, difficulty);
+      
+      if (!question) {
+        // No more questions available
+        endQuiz();
+        return;
+      }
+
+      // Reset animations
+      timerAnim.setValue(1);
+      fadeAnim.setValue(0);
+      cardAnim.setValue(0);
+      optionsAnim.forEach(anim => anim.setValue(0));
+
+      setState(prev => ({
+        ...prev,
+        currentQuestion: question,
+        selectedAnswer: null,
+        showResult: false,
+        isCorrect: false,
+        showExplanation: false,
+        showMascot: false,
+        isLoading: false,
+        timeRemaining: QUESTION_TIME_LIMIT,
+        isTimerActive: true,
+        hasTimedOut: false
+      }));
+
+      // Start animations
+      startEntranceAnimations();
+      
+      // Start timer
+      startQuestionTimer();
+      
+      // Record question start time
+      questionStartTime.current = Date.now();
+      
+    } catch (error) {
+      console.error('Failed to load question:', error);
+      endQuiz();
+    }
+  };
+
+  const startEntranceAnimations = () => {
+    // Fade in screen
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+
+    // Card entrance
+    Animated.spring(cardAnim, {
+      toValue: 1,
+      tension: 100,
+      friction: 8,
+      useNativeDriver: true,
+    }).start();
+
+    // Staggered option animations
+    optionsAnim.forEach((anim, index) => {
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 300,
+        delay: index * 100,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    });
+  };
+
+  const startQuestionTimer = () => {
+    // Clear any existing timer
+    if (questionTimerRef.current) {
+      clearInterval(questionTimerRef.current);
+    }
+
+    // Start timer animation
+    Animated.timing(timerAnim, {
+      toValue: 0,
+      duration: QUESTION_TIME_LIMIT * 1000,
+      easing: Easing.linear,
+      useNativeDriver: false,
+    }).start();
+
+    // Start countdown timer
+    questionTimerRef.current = setInterval(() => {
+      setState(prev => {
+        const newTime = prev.timeRemaining - 1;
+        
+        if (newTime <= 0) {
+          // Time's up!
+          handleTimeout();
+          return { ...prev, timeRemaining: 0, isTimerActive: false };
+        }
+        
+        return { ...prev, timeRemaining: newTime };
+      });
+    }, 1000);
+  };
+
+  const stopTimer = () => {
+    if (questionTimerRef.current) {
+      clearInterval(questionTimerRef.current);
+      questionTimerRef.current = null;
+    }
+    
+    // Stop timer animation
+    timerAnim.stopAnimation();
+    
+    setState(prev => ({ ...prev, isTimerActive: false }));
+  };
+
+  const handleTimeout = () => {
+    stopTimer();
+    
+    setState(prev => ({ ...prev, hasTimedOut: true }));
+    
+    // Play timeout sound
+    SoundService.playIncorrect();
+    
+    // Show timeout result
+    processAnswer(null, true);
+  };
+
+  const handleAnswerSelection = (selectedKey: string) => {
+    // Prevent multiple selections
+    if (state.selectedAnswer || state.showResult || !state.isTimerActive) {
+      return;
+    }
+
+    // Stop timer immediately
+    stopTimer();
+    
+    // Process the answer
+    processAnswer(selectedKey, false);
+  };
+
+  const processAnswer = async (selectedKey: string | null, isTimeout: boolean) => {
+    if (!state.currentQuestion) return;
+
+    const isCorrect = selectedKey === state.currentQuestion.correctAnswer && !isTimeout;
+    const responseTime = questionStartTime.current ? Date.now() - questionStartTime.current : QUESTION_TIME_LIMIT * 1000;
+
+    // Update state with selection
+    setState(prev => ({
+      ...prev,
+      selectedAnswer: selectedKey,
+      showResult: true,
+      isCorrect,
+      questionsAnswered: prev.questionsAnswered + 1,
+      correctAnswers: prev.correctAnswers + (isCorrect ? 1 : 0)
+    }));
+
+    // Play sound
+    if (isCorrect) {
+      SoundService.playCorrect();
+    } else {
+      SoundService.playIncorrect();
+      // Shake animation for wrong answer
+      startShakeAnimation();
+    }
+
+    try {
+      // Update score through EnhancedScoreService
+      const result = await EnhancedScoreService.processAnswer(
+        isCorrect,
+        difficulty,
+        {
+          startTime: questionStartTime.current,
+          category: category || state.currentQuestion.category,
+          responseTime,
+          isTimeout
+        }
+      );
+
+      // Update streak
+      const newStreak = isCorrect ? result.currentStreak : 0;
+      const isStreakMilestone = result.isMilestone;
+
+      setState(prev => ({
+        ...prev,
+        streak: newStreak,
+        score: result.newScore,
+        pointsEarned: result.pointsEarned,
+        isStreakMilestone,
+        showPointsAnimation: result.pointsEarned > 0,
+        showStreakAnimation: isStreakMilestone
+      }));
+
+      // Add time credits for correct answers
+      if (isCorrect) {
+        const timeCredits = getTimeCredits(difficulty, responseTime);
+        if (timeCredits > 0) {
+          await EnhancedTimerService.addTimeCredits(timeCredits);
+        }
+      }
+
+      // Show mascot
+      showMascotFeedback(isCorrect, isStreakMilestone);
+
+      // Animate points
+      if (result.pointsEarned > 0) {
+        animatePoints();
+      }
+
+      // Animate streak if milestone
+      if (isStreakMilestone) {
+        animateStreak();
+      }
+
+      // Log answer
+      logEvent('question_answered', {
+        correct: isCorrect,
+        difficulty,
+        category: category || state.currentQuestion.category,
+        responseTime,
+        isTimeout,
+        streak: newStreak
+      });
+
+    } catch (error) {
+      console.error('Failed to process answer:', error);
+    }
+
+    // Show result for a few seconds, then continue
+    resultTimerRef.current = setTimeout(() => {
+      setState(prev => ({ ...prev, showExplanation: true }));
+      
+      animationTimeoutRef.current = setTimeout(() => {
+        loadNextQuestion();
+      }, NEXT_QUESTION_DELAY);
+    }, RESULT_DISPLAY_TIME);
+  };
+
+  const getTimeCredits = (difficulty: string, responseTime: number): number => {
+    const baseCredits = {
+      easy: 60,    // 1 minute
+      medium: 120, // 2 minutes  
+      hard: 180    // 3 minutes
+    };
+
+    const base = baseCredits[difficulty as keyof typeof baseCredits] || 60;
+    
+    // Bonus for fast responses (under 10 seconds)
+    if (responseTime < 10000) {
+      return base + 30; // 30 second bonus
+    }
+    
+    return base;
+  };
+
+  const showMascotFeedback = (isCorrect: boolean, isStreakMilestone: boolean) => {
+    let mascotType: MascotType;
+    let message: string;
+
+    if (isStreakMilestone) {
+      mascotType = 'excited';
+      message = `Amazing! ${state.streak} in a row! 🔥`;
+    } else if (isCorrect) {
+      mascotType = 'happy';
+      message = 'Correct! Well done! 🎉';
+    } else {
+      mascotType = 'sad';
+      message = 'Not quite right. Keep trying! 💪';
+    }
+
+    setState(prev => ({
+      ...prev,
+      showMascot: true,
+      mascotMessage: message
+    }));
+
+    // Hide mascot after animation
+    setTimeout(() => {
+      setState(prev => ({ ...prev, showMascot: false }));
+    }, 2000);
+  };
+
+  const startShakeAnimation = () => {
+    Animated.sequence([
+      Animated.timing(shakeAnim, { toValue: 10, duration: 100, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -10, duration: 100, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 10, duration: 100, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const animatePoints = () => {
+    pointsAnim.setValue(0);
+    Animated.spring(pointsAnim, {
+      toValue: 1,
+      tension: 100,
+      friction: 8,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const animateStreak = () => {
+    streakAnim.setValue(0);
+    Animated.sequence([
+      Animated.spring(streakAnim, {
+        toValue: 1.2,
+        tension: 100,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+      Animated.spring(streakAnim, {
+        toValue: 1,
+        tension: 100,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const handleQuitQuiz = () => {
     Alert.alert(
-      'Leave Quiz?',
-      'Your score will be saved but your streak will be broken. Are you sure you want to leave?',
+      'Quit Quiz',
+      'Are you sure you want to quit? Your progress will be lost.',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Continue', style: 'cancel' },
         { 
-          text: 'Leave', 
+          text: 'Quit', 
           style: 'destructive',
           onPress: () => {
-            // Break streak by processing a wrong answer
-            if (difficulty) {
-              EnhancedScoreService.processAnswer(false, difficulty);
-            }
+            cleanup();
+            SoundService.stopMusic();
             navigation.goBack();
           }
         }
@@ -163,411 +510,96 @@ const QuizScreen: React.FC = () => {
     );
   };
 
-  const loadQuestion = async () => {
-    setState(prev => ({ ...prev, isLoading: true, selectedAnswer: null, isCorrect: null, 
-      showExplanation: false, showPointsAnimation: false, isStreakMilestone: false }));
-    setShowMascot(false);
+  const endQuiz = () => {
+    cleanup();
     
-    if (autoAdvanceTimer.current) clearTimeout(autoAdvanceTimer.current);
-    
-    // Reset animations
-    cardAnim.setValue(0);
-    fadeAnim.setValue(0);
-    explanationAnim.setValue(0);
-    timerAnim.setValue(1);
-    
-    try {
-      const question = QuestionService.getRandomQuestion(category, difficulty);
-      setState(prev => ({
-        ...prev,
-        currentQuestion: question,
-        questionsAnswered: prev.questionsAnswered + 1,
-        isLoading: false,
-      }));
-      
-      SoundService.playButtonPress();
-      
-      // Create animation values for options
-      const numOptions = 4; // A, B, C, D
-      for (let i = 0; i < numOptions; i++) {
-        if (!optionsAnim[i]) {
-          optionsAnim[i] = new Animated.Value(0);
-        }
-      }
-      
-      // Start animations
-      animateQuestionEntrance();
-      startTimerAnimation();
-      
-      questionStartTime.current = Date.now();
-      EnhancedScoreService.startQuestionTimer();
-      
-    } catch (error) {
-      console.error('Error loading question:', error);
-      setState(prev => ({ ...prev, isLoading: false }));
-      setMascotType('sad');
-      setMascotMessage('No more questions available! Great job completing all questions!');
-      setShowMascot(true);
-    }
-  };
-
-  const animateQuestionEntrance = () => {
-    Animated.parallel([
-      Animated.timing(cardAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-        easing: Easing.out(Easing.back(1.5)),
-      }),
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-        easing: Easing.out(Easing.cubic),
-      }),
-      ...optionsAnim.map((anim, index) => 
-        Animated.sequence([
-          Animated.delay(400 + (index * 100)),
-          Animated.spring(anim, {
-            toValue: 1,
-            friction: 7,
-            tension: 40,
-            useNativeDriver: true,
-          }),
-        ])
-      ),
-    ]).start();
-  };
-
-  const startTimerAnimation = () => {
-    timerAnimation.current = Animated.timing(timerAnim, {
-      toValue: 0,
-      duration: 20000,
-      useNativeDriver: false,
-      easing: Easing.linear,
+    logEvent('quiz_completed', {
+      questionsAnswered: state.questionsAnswered,
+      correctAnswers: state.correctAnswers,
+      finalScore: state.score,
+      difficulty,
+      category: category || 'random'
     });
-    
-    timerAnimation.current.start();
-    
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      if (state.selectedAnswer === null) handleTimeUp();
-    }, 20000);
-  };
-  
-  const handleTimeUp = async () => {
-    if (!state.currentQuestion || !difficulty) return;
-    
-    setState(prev => ({ ...prev, selectedAnswer: 'TIMEOUT', isCorrect: false }));
-    
-    setTimeout(() => {
-      setState(prev => ({ ...prev, showExplanation: true }));
-      showExplanationWithAnimation();
-    }, 500);
-    
-    await EnhancedScoreService.processAnswer(false, difficulty, { 
-      startTime: questionStartTime.current,
-      category: state.currentQuestion.category 
-    });
-    
-    setState(prev => ({ ...prev, streak: 0 }));
-    SoundService.playIncorrect();
-    
-    setMascotType('sad');
-    setMascotMessage("Time's up! ⏰\nDon't worry, you'll get the next one!");
-    setShowMascot(true);
-    
-    autoAdvanceTimer.current = setTimeout(() => {
-      handleContinue();
-    }, 2000);
-  };
 
-  // Move to next question
-  const moveToNextQuestion = () => {
-    const nextQuestion = QuestionService.getNextQuestion(difficulty);
-    
-    // Convert old format to new format if needed
-    if (nextQuestion && !nextQuestion.options && nextQuestion.optionA) {
-      nextQuestion.options = {
-        A: nextQuestion.optionA,
-        B: nextQuestion.optionB || '',
-        C: nextQuestion.optionC || '',
-        D: nextQuestion.optionD || '',
-      };
-      nextQuestion.difficulty = nextQuestion.level || difficulty;
-      nextQuestion.explanation = nextQuestion.explanation || 'No explanation available.';
-    }
-    
-    // Reset state for next question
-    setState(prev => ({
-      ...prev,
-      selectedAnswer: null,
-      showResult: false,
-      isCorrect: false,
-      showExplanation: false,
-      currentQuestion: nextQuestion,
-    }));
-    
-    // Reset timers and animations
-    if (questionTimer.current) clearTimeout(questionTimer.current);
-    if (streakTimer.current) clearTimeout(streakTimer.current);
-  };
-
-  // Update handleAnswer function
-  const handleAnswer = async (answer: string) => {
-    if (!state.currentQuestion || !difficulty) return;
-    
-    const isCorrect = answer === state.currentQuestion.correctAnswer;
-    
-    // Calculate time reward based on difficulty
-    let timeReward = 60; // Default 1 minute
-    if (state.currentQuestion.difficulty === 'medium') timeReward = 120; // 2 minutes
-    if (state.currentQuestion.difficulty === 'hard') timeReward = 180; // 3 minutes
-    
-    try {
-      // Process answer and get result
-      const result = await EnhancedScoreService.processAnswer(isCorrect, difficulty, { 
-        startTime: questionStartTime.current,
-        category: state.currentQuestion.category,
-      });
-      
-      // Update UI
-      setState(prev => ({
-        ...prev,
-        selectedAnswer: answer,
-        showResult: true,
-        isCorrect,
-        streak: isCorrect ? prev.streak + 1 : 0,
-        questionsAnswered: prev.questionsAnswered + 1,
-        correctAnswers: isCorrect ? prev.correctAnswers + 1 : prev.correctAnswers,
-      }));
-      
-      // Handle sound effects
-      if (isCorrect) {
-        SoundService.playCorrect();
-        if (state.streak % 5 === 0) {
-          SoundService.playStreak();
-          setState(prev => ({ ...prev, showStreakAnimation: true }));
-          if (streakTimer.current) clearTimeout(streakTimer.current);
-          streakTimer.current = setTimeout(() => {
-            setState(prev => ({ ...prev, showStreakAnimation: false }));
-          }, 2000);
-        }
-      } else {
-        SoundService.playIncorrect();
-      }
-      
-      // Log analytics
-      logEvent('answer_question', {
-        isCorrect,
-        difficulty,
-        category: state.currentQuestion.category,
-        questionId: state.currentQuestion.id,
-      });
-      
-      // Move to next question after delay
-      if (questionTimer.current) clearTimeout(questionTimer.current);
-      questionTimer.current = setTimeout(() => {
-        moveToNextQuestion();
-      }, 2000);
-    } catch (error) {
-      console.error('Error processing answer:', error);
-    }
-  };
-
-  const animatePoints = () => {
-    pointsAnim.setValue(0);
-    Animated.spring(pointsAnim, {
-      toValue: 1,
-      friction: 5,
-      useNativeDriver: true,
-    }).start();
-  };
-  
-  const showExplanationWithAnimation = () => {
-    Animated.timing(explanationAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-      easing: Easing.out(Easing.cubic),
-    }).start();
-  };
-  
-  const showMascotForWrongAnswer = () => {
-    if (!state.currentQuestion) return;
-    setMascotType('sad');
-    setMascotMessage(`Not quite right. The answer was ${state.currentQuestion.correctAnswer}.`);
-    setShowMascot(true);
-  };
-  
-  const handlePeekingMascotPress = () => {
-    if (!state.currentQuestion) return;
-    
-    if (state.selectedAnswer && state.showExplanation) {
-      if (state.isCorrect) {
-        setMascotType('happy');
-        setMascotMessage(`Great job! Here's why this is correct:\n\n${state.currentQuestion.explanation}\n\nKeep up the excellent work! 🌟`);
-      } else {
-        setMascotType('happy');
-        setMascotMessage(`Let me explain why the answer was ${state.currentQuestion.correctAnswer}:\n\n${state.currentQuestion.explanation}\n\nDon't worry, you'll get the next one! 💪`);
-      }
-      setShowMascot(true);
-    } else if (!state.selectedAnswer) {
-      setMascotType('happy');
-      setMascotMessage('Take your time and think carefully! 🤔\n\nYou\'ve got this! 💪');
-      setShowMascot(true);
-    }
-  };
-  
-  const handleMascotDismiss = () => {
-    setShowMascot(false);
-  };
-  
-  const handleContinue = () => {
-    if (autoAdvanceTimer.current) clearTimeout(autoAdvanceTimer.current);
-    SoundService.playButtonPress();
-    setShowMascot(false);
-    setTimeout(() => loadQuestion(), 100);
-  };
-  
-  const handleGoBack = () => {
-    handleBackPress();
-  };
-  
-  const getAccuracy = () => {
-    if (state.questionsAnswered === 0) return 0;
-    return Math.round((state.correctAnswers / state.questionsAnswered) * 100);
-  };
-  
-  const getStreakProgress = () => {
-    if (state.streak === 0) return 0;
-    return (state.streak % 5) / 5;
+    SoundService.stopMusic();
+    navigation.navigate('Home');
   };
 
   const getOptions = () => {
     if (!state.currentQuestion) return [];
+    
     return [
-      { key: 'A', value: state.currentQuestion.optionA },
-      { key: 'B', value: state.currentQuestion.optionB },
-      { key: 'C', value: state.currentQuestion.optionC },
-      { key: 'D', value: state.currentQuestion.optionD },
-    ];
+      { key: 'A', text: state.currentQuestion.optionA || state.currentQuestion.options?.A || '' },
+      { key: 'B', text: state.currentQuestion.optionB || state.currentQuestion.options?.B || '' },
+      { key: 'C', text: state.currentQuestion.optionC || state.currentQuestion.options?.C || '' },
+      { key: 'D', text: state.currentQuestion.optionD || state.currentQuestion.options?.D || '' },
+    ].filter(option => option.text);
+  };
+
+  const getOptionStyle = (optionKey: string) => {
+    if (!state.showResult) return styles.optionButton;
+    
+    const isSelected = state.selectedAnswer === optionKey;
+    const isCorrect = optionKey === state.currentQuestion?.correctAnswer;
+    
+    if (isCorrect) {
+      return [styles.optionButton, styles.correctOption];
+    } else if (isSelected && !isCorrect) {
+      return [styles.optionButton, styles.incorrectOption];
+    }
+    
+    return [styles.optionButton, styles.disabledOption];
+  };
+
+  const getTimerColor = () => {
+    if (state.timeRemaining > 10) return '#22c55e';
+    if (state.timeRemaining > 5) return '#facc15';
+    return '#ef4444';
   };
 
   if (state.isLoading) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.container}>
         <StatusBar backgroundColor="#FFF8E7" barStyle="dark-content" />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#FF9F1C" />
-          <Text style={styles.loadingText}>Loading question...</Text>
+          <Text style={styles.loadingText}>Loading Quiz...</Text>
         </View>
       </SafeAreaView>
     );
   }
-  
+
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor="#FFF8E7" barStyle="dark-content" />
-      <ScrollView 
-        contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header with stats */}
-        <Animated.View 
-          style={[
-            styles.header,
-            { opacity: fadeAnim }
-          ]}
-        >
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={showExitWarning}
-          >
-            <Icon name="arrow-back" size={24} color="#666" />
-          </TouchableOpacity>
-          
-          <View style={styles.statsContainer}>
-            <Icon name="check-circle-outline" size={18} color="#4CAF50" />
-            <Text style={styles.statsText}>{state.correctAnswers}/{state.questionsAnswered}</Text>
-            <Text style={styles.accuracyText}>({getAccuracy()}%)</Text>
-          </View>
-          
-          <View style={styles.scoreContainer}>
-            <Icon name="star" size={18} color="#FF9F1C" />
-            <Text style={styles.scoreText}>{state.score}</Text>
-          </View>
-          
-          <Animated.View 
-            style={[
-              styles.streakContainer,
-              {
-                transform: [{ scale: streakAnim }],
-                backgroundColor: state.isStreakMilestone ? '#FF9F1C' : 'white',
-              }
-            ]}
-          >
-            <Icon 
-              name="fire" 
-              size={16} 
-              color={state.isStreakMilestone ? 'white' : (state.streak > 0 ? '#FF9F1C' : '#ccc')} 
-            />
-            <Text 
-              style={[
-                styles.streakText,
-                state.isStreakMilestone && { color: 'white' }
-              ]}
-            >
-              {state.streak}
-            </Text>
-          </Animated.View>
-        </Animated.View>
+      
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={handleQuitQuiz} style={styles.backButton}>
+          <Icon name="arrow-left" size={24} color="#333" />
+        </TouchableOpacity>
         
-        {/* Category and difficulty indicator */}
-        <Animated.View 
-          style={[
-            styles.categoryContainer,
-            { opacity: fadeAnim }
-          ]}
-        >
-          <Text style={styles.categoryText}>
-            {category ? category.charAt(0).toUpperCase() + category.slice(1) : 'Mixed'}
-            {state.currentQuestion?.level && ` • ${state.currentQuestion.level.charAt(0).toUpperCase() + state.currentQuestion.level.slice(1)}`}
+        <View style={styles.progressContainer}>
+          <Text style={styles.progressText}>
+            {state.questionsAnswered + 1} • Score: {state.score}
           </Text>
-        </Animated.View>
+          <Text style={styles.streakText}>
+            Streak: {state.streak} 🔥
+          </Text>
+        </View>
         
-        {/* Streak progress bar */}
-        {state.streak > 0 && (
-          <Animated.View 
-            style={[
-              styles.streakProgressContainer,
-              { opacity: fadeAnim }
-            ]}
-          >
-            <View style={styles.streakProgressBar}>
-              <Animated.View 
-                style={[
-                  styles.streakProgressFill,
-                  {
-                    width: `${getStreakProgress() * 100}%`,
-                    backgroundColor: state.isStreakMilestone ? '#FF9F1C' : '#FF9F1C'
-                  }
-                ]}
-              />
-            </View>
-            <Text style={styles.streakProgressText}>
-              {state.isStreakMilestone ? 'Streak Milestone!' : `Next milestone: ${Math.ceil(state.streak/5)*5}`}
-            </Text>
-          </Animated.View>
-        )}
+        <View style={styles.timerDisplay}>
+          <Icon name="timer" size={20} color={getTimerColor()} />
+          <Text style={[styles.timerText, { color: getTimerColor() }]}>
+            {state.timeRemaining}s
+          </Text>
+        </View>
+      </View>
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         
-        {/* Timer bar */}
-        <Animated.View 
-          style={[
-            styles.timerContainer,
-            { opacity: fadeAnim }
-          ]}
-        >
+        {/* Timer Bar */}
+        <Animated.View style={[styles.timerContainer, { opacity: fadeAnim }]}>
           <View style={styles.timerBar}>
             <Animated.View 
               style={[
@@ -577,181 +609,163 @@ const QuizScreen: React.FC = () => {
                     inputRange: [0, 1],
                     outputRange: ['0%', '100%']
                   }),
-                  backgroundColor: timerAnim.interpolate({
-                    inputRange: [0, 0.3, 0.7, 1],
-                    outputRange: ['#ef4444', '#facc15', '#22c55e', '#22c55e']
-                  })
+                  backgroundColor: getTimerColor()
                 }
               ]}
             />
           </View>
-          <View style={styles.timerIconContainer}>
-            <Icon name="timer-outline" size={18} color="#777" />
-          </View>
         </Animated.View>
-        
-        {/* Question card */}
+
+        {/* Question Card */}
         <Animated.View 
           style={[
-            styles.questionSection,
+            styles.questionCard,
             {
               opacity: cardAnim,
               transform: [
                 { 
                   translateY: cardAnim.interpolate({
                     inputRange: [0, 1],
-                    outputRange: [20, 0]
+                    outputRange: [50, 0]
                   })
                 },
-                { 
-                  scale: cardAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.95, 1]
-                  })
+                {
+                  translateX: shakeAnim
                 }
               ]
             }
           ]}
         >
-          {/* Question text with floating design */}
-          <View style={styles.questionTextContainer}>
-            <Text style={styles.questionText}>{state.currentQuestion?.question}</Text>
-          </View>
-          
-          <View style={styles.optionsContainer}>
-            {getOptions().map((option, index) => (
-              <Animated.View
-                key={option.key}
-                style={{
-                  opacity: optionsAnim[index] || fadeAnim,
-                  transform: [
-                    { 
-                      translateY: (optionsAnim[index] || fadeAnim).interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [20, 0]
-                      })
-                    }
-                  ]
-                }}
+          <Text style={styles.questionText}>
+            {state.currentQuestion?.question}
+          </Text>
+        </Animated.View>
+
+        {/* Options */}
+        <View style={styles.optionsContainer}>
+          {getOptions().map((option, index) => (
+            <Animated.View
+              key={option.key}
+              style={{
+                opacity: optionsAnim[index],
+                transform: [
+                  { 
+                    translateY: optionsAnim[index].interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [30, 0]
+                    })
+                  }
+                ]
+              }}
+            >
+              <TouchableOpacity
+                style={getOptionStyle(option.key)}
+                onPress={() => handleAnswerSelection(option.key)}
+                disabled={state.showResult || !state.isTimerActive}
+                activeOpacity={0.8}
               >
-                <TouchableOpacity
-                  style={[
-                    styles.optionButton,
-                    state.selectedAnswer === option.key && (
-                      option.key === state.currentQuestion?.correctAnswer ? styles.correctOption : styles.incorrectOption
-                    ),
-                    state.selectedAnswer === null && styles.hoverableOption
-                  ]}
-                  onPress={() => handleAnswer(option.key)}
-                  disabled={state.selectedAnswer !== null}
-                  activeOpacity={0.8}
-                >
+                <View style={styles.optionContent}>
                   <View style={[
-                    styles.optionKeyContainer,
-                    state.selectedAnswer === option.key && option.key === state.currentQuestion?.correctAnswer && styles.correctKeyContainer,
-                    state.selectedAnswer === option.key && option.key !== state.currentQuestion?.correctAnswer && styles.incorrectKeyContainer
+                    styles.optionKey,
+                    state.selectedAnswer === option.key && styles.selectedOptionKey
                   ]}>
                     <Text style={[
-                      styles.optionKey,
+                      styles.optionKeyText,
                       state.selectedAnswer === option.key && styles.selectedOptionKeyText
-                    ]}>{option.key}</Text>
+                    ]}>
+                      {option.key}
+                    </Text>
                   </View>
+                  <Text style={styles.optionText}>{option.text}</Text>
                   
-                  <Text style={styles.optionText}>{option.value}</Text>
-                  
-                  {/* Result icons */}
-                  {state.selectedAnswer === option.key && option.key === state.currentQuestion?.correctAnswer && (
-                    <View style={styles.resultIconContainer}>
-                      <Icon name="check-circle" size={24} color="#4CAF50" style={styles.resultIcon} />
-                    </View>
+                  {state.showResult && option.key === state.currentQuestion?.correctAnswer && (
+                    <Icon name="check-circle" size={24} color="#22c55e" />
                   )}
-                  
-                  {state.selectedAnswer === option.key && option.key !== state.currentQuestion?.correctAnswer && (
-                    <View style={styles.resultIconContainer}>
-                      <Icon name="close-circle" size={24} color="#F44336" style={styles.resultIcon} />
-                    </View>
+                  {state.showResult && state.selectedAnswer === option.key && 
+                   option.key !== state.currentQuestion?.correctAnswer && (
+                    <Icon name="close-circle" size={24} color="#ef4444" />
                   )}
-                  
-                  {state.selectedAnswer !== option.key && state.selectedAnswer !== null && option.key === state.currentQuestion?.correctAnswer && (
-                    <View style={styles.resultIconContainer}>
-                      <Icon name="check-circle-outline" size={24} color="#4CAF50" style={styles.resultIcon} />
-                    </View>
-                  )}
-                  
-                  {state.selectedAnswer === null && (
-                    <Icon name="chevron-right" size={20} color="#ccc" style={styles.optionArrow} />
-                  )}
-                </TouchableOpacity>
-              </Animated.View>
-            ))}
-          </View>
-        </Animated.View>
-        
-        {/* Points animation popup */}
+                </View>
+              </TouchableOpacity>
+            </Animated.View>
+          ))}
+        </View>
+
+        {/* Explanation */}
+        {state.showExplanation && state.currentQuestion?.explanation && (
+          <Animated.View style={[styles.explanationCard, { opacity: fadeAnim }]}>
+            <Icon name="information" size={20} color="#2196F3" />
+            <Text style={styles.explanationText}>
+              {state.currentQuestion.explanation}
+            </Text>
+          </Animated.View>
+        )}
+
+        {/* Points Animation */}
         {state.showPointsAnimation && (
           <Animated.View 
             style={[
-              styles.pointsAnimationContainer,
+              styles.pointsAnimation,
               {
                 opacity: pointsAnim,
                 transform: [
-                  { 
-                    translateY: pointsAnim.interpolate({
+                  {
+                    scale: pointsAnim.interpolate({
                       inputRange: [0, 1],
-                      outputRange: [0, -30]
+                      outputRange: [0.5, 1]
                     })
                   },
-                  { 
-                    scale: pointsAnim.interpolate({
-                      inputRange: [0, 0.5, 1],
-                      outputRange: [0.8, 1.2, 1]
+                  {
+                    translateY: pointsAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [20, 0]
                     })
                   }
                 ]
               }
             ]}
           >
-            <Icon name="star" size={20} color="#FFD700" style={styles.pointsIcon} />
             <Text style={styles.pointsText}>+{state.pointsEarned}</Text>
           </Animated.View>
         )}
-        
-        {/* AdMob Banner Ad */}
-        <View style={styles.adContainer}>
-          <BannerAdComponent />
-        </View>
+
+        {/* Streak Animation */}
+        {state.showStreakAnimation && (
+          <Animated.View 
+            style={[
+              styles.streakAnimation,
+              {
+                opacity: streakAnim,
+                transform: [{ scale: streakAnim }]
+              }
+            ]}
+          >
+            <Text style={styles.streakAnimationText}>
+              🔥 STREAK MILESTONE! 🔥
+            </Text>
+            <Text style={styles.streakCountText}>{state.streak} in a row!</Text>
+          </Animated.View>
+        )}
+
+        <BannerAdComponent />
       </ScrollView>
-      
-      {/* Enhanced Mascot */}
-      <EnhancedMascotDisplay
-        type={mascotType}
-        position="left"
-        showMascot={showMascot}
-        message={mascotMessage}
-        onDismiss={handleMascotDismiss}
-        onMessageComplete={handleMascotDismiss}
-        autoHide={false}
-        fullScreen={true}
-        onPeekingPress={handlePeekingMascotPress}
-        isQuizScreen={true}
-        currentQuestion={state.currentQuestion}
-        selectedAnswer={state.selectedAnswer}
-        showExplanation={state.showExplanation}
-        isCorrect={state.isCorrect}
-      />
+
+      {/* Mascot Display */}
+      {state.showMascot && (
+        <EnhancedMascotDisplay
+          mood={state.isCorrect ? (state.isStreakMilestone ? 'excited' : 'happy') : 'sad'}
+          message={state.mascotMessage}
+          visible={state.showMascot}
+        />
+      )}
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
     backgroundColor: '#FFF8E7',
-  },
-  container: {
-    padding: 20,
-    paddingTop: 16,
-    paddingBottom: 40,
   },
   loadingContainer: {
     flex: 1,
@@ -760,274 +774,62 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 16,
-    fontSize: 18,
-    color: '#777',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif-medium',
+    fontSize: 16,
+    fontFamily: 'Nunito-Bold',
+    color: '#333',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'white',
+    backgroundColor: 'rgba(0,0,0,0.05)',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
   },
-  statsContainer: {
-    flexDirection: 'row',
+  progressContainer: {
     alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 20,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
   },
-  statsText: {
-    marginLeft: 6,
-    fontWeight: '600',
-    fontSize: 14,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif-medium',
+  progressText: {
+    fontSize: 16,
+    fontFamily: 'Nunito-Bold',
     color: '#333',
-  },
-  accuracyText: {
-    marginLeft: 4,
-    fontSize: 12,
-    color: '#666',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'sans-serif',
-  },
-  scoreContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 20,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  scoreText: {
-    marginLeft: 6,
-    fontWeight: '600',
-    fontSize: 14,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif-medium',
-    color: '#333',
-  },
-  streakContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 20,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
   },
   streakText: {
-    marginLeft: 6,
-    fontWeight: '600',
     fontSize: 14,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif-medium',
-    color: '#333',
+    fontFamily: 'Nunito-Regular',
+    color: '#FF6B35',
+    marginTop: 2,
   },
-  categoryContainer: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FF9F1C',
-    borderRadius: 20,
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  categoryText: {
-    color: 'white',
-    fontWeight: '600',
-    fontSize: 14,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif-medium',
-  },
-  streakProgressContainer: {
-    marginBottom: 16,
-  },
-  streakProgressBar: {
-    height: 6,
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  streakProgressFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  streakProgressText: {
-    marginTop: 4,
-    fontSize: 12,
-    color: '#777',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir' : 'sans-serif',
-    textAlign: 'right',
-  },
-  questionSection: {
-    marginBottom: 24,
-  },
-  questionTextContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  questionText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    lineHeight: 28,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
-  },
-  optionsContainer: {
-    marginTop: 8,
-  },
-  optionButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    padding: 18,
-    borderRadius: 18,
-    marginBottom: 14,
+  timerDisplay: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
   },
-  optionKeyContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0, 0, 0, 0.08)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  optionKey: {
+  timerText: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Heavy' : 'sans-serif-medium',
+    fontFamily: 'Nunito-Bold',
+    marginLeft: 4,
   },
-  optionText: {
-    fontSize: 16,
+  content: {
     flex: 1,
-    color: '#333',
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Medium' : 'sans-serif',
-  },
-  resultIcon: {
-    marginLeft: 12,
-  },
-  correctOption: {
-    backgroundColor: 'rgba(76, 175, 80, 0.12)',
-    borderColor: '#4CAF50',
-    borderWidth: 2,
-    shadowColor: '#4CAF50',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 6,
-    transform: [{ scale: 1.02 }],
-  },
-  incorrectOption: {
-    backgroundColor: 'rgba(244, 67, 54, 0.12)',
-    borderColor: '#F44336',
-    borderWidth: 2,
-    shadowColor: '#F44336',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 6,
-    transform: [{ scale: 1.02 }],
-  },
-  pointsAnimationContainer: {
-    position: 'absolute',
-    top: '30%', 
-    right: '15%',
-    backgroundColor: 'white',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  pointsIcon: {
-    marginRight: 6,
-  },
-  pointsText: {
-    color: '#FF9F1C',
-    fontWeight: 'bold',
-    fontSize: 20,
-    fontFamily: Platform.OS === 'ios' ? 'Avenir-Black' : 'sans-serif-black',
-  },
-  hoverableOption: {
-    borderColor: 'rgba(0, 0, 0, 0.1)',
-  },
-  correctKeyContainer: {
-    backgroundColor: 'rgba(76, 175, 80, 0.2)',
-  },
-  incorrectKeyContainer: {
-    backgroundColor: 'rgba(244, 67, 54, 0.2)',
-  },
-  selectedOptionKeyText: {
-    color: 'white',
-  },
-  resultIconContainer: {
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 2,
-  },
-  optionArrow: {
-    position: 'absolute',
-    right: 16,
+    paddingHorizontal: 20,
   },
   timerContainer: {
-    marginBottom: 20,
-    position: 'relative',
+    marginTop: 20,
+    marginBottom: 24,
   },
   timerBar: {
     height: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    backgroundColor: 'rgba(0,0,0,0.1)',
     borderRadius: 4,
     overflow: 'hidden',
   },
@@ -1035,26 +837,132 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 4,
   },
-  timerIconContainer: {
-    position: 'absolute',
-    right: -8,
-    top: -8,
+  questionCard: {
     backgroundColor: 'white',
-    width: 24,
-    height: 24,
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  questionText: {
+    fontSize: 20,
+    fontFamily: 'Nunito-Bold',
+    color: '#333',
+    textAlign: 'center',
+    lineHeight: 28,
+  },
+  optionsContainer: {
+    gap: 12,
+  },
+  optionButton: {
+    backgroundColor: 'white',
     borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(0,0,0,0.1)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowRadius: 4,
     elevation: 2,
   },
-  adContainer: {
-    marginTop: 16,
-    marginBottom: 16,
+  correctOption: {
+    borderColor: '#22c55e',
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+  },
+  incorrectOption: {
+    borderColor: '#ef4444',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  disabledOption: {
+    opacity: 0.6,
+  },
+  optionContent: {
+    flexDirection: 'row',
     alignItems: 'center',
+  },
+  optionKey: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  selectedOptionKey: {
+    backgroundColor: '#FF6B35',
+  },
+  optionKeyText: {
+    fontSize: 16,
+    fontFamily: 'Nunito-Bold',
+    color: '#333',
+  },
+  selectedOptionKeyText: {
+    color: 'white',
+  },
+  optionText: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: 'Nunito-Regular',
+    color: '#333',
+    lineHeight: 22,
+  },
+  explanationCard: {
+    backgroundColor: 'rgba(33, 150, 243, 0.1)',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  explanationText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: 'Nunito-Regular',
+    color: '#333',
+    marginLeft: 8,
+    lineHeight: 20,
+  },
+  pointsAnimation: {
+    position: 'absolute',
+    top: 100,
+    right: 20,
+    backgroundColor: '#22c55e',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  pointsText: {
+    fontSize: 18,
+    fontFamily: 'Nunito-Bold',
+    color: 'white',
+  },
+  streakAnimation: {
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    right: 20,
+    backgroundColor: '#FF6B35',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+  },
+  streakAnimationText: {
+    fontSize: 18,
+    fontFamily: 'Nunito-Bold',
+    color: 'white',
+    textAlign: 'center',
+  },
+  streakCountText: {
+    fontSize: 16,
+    fontFamily: 'Nunito-Regular',
+    color: 'white',
+    marginTop: 4,
   },
 });
 
